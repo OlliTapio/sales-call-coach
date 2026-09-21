@@ -4,6 +4,7 @@
 // placeholder that shipped.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readWorkflow, drift } from '../sync-code.mjs';
 
 const wf = readWorkflow();
@@ -76,6 +77,32 @@ test('expressions have balanced braces', () => {
   for (const node of wf.nodes) walk(node.parameters, node.name);
 });
 
+test('both templates the README documents are the ones the workflow sends', () => {
+  const sent = new Set(wf.nodes.map((n) => n.parameters.template).filter(Boolean));
+  assert.deepEqual([...sent].sort(), ['daily_sales_goal|en', 'daily_sales_nudge|en']);
+});
+
+test('the nudge falls back to a template when the model cannot write one', () => {
+  const chain = wf.nodes.find((n) => n.name === 'Write the nudge');
+  assert.equal(chain.onError, 'continueErrorOutput');
+  const [ok, err] = wf.connections['Write the nudge'].main;
+  assert.deepEqual(ok.map((c) => c.node), ['Tidy the nudge']);
+  assert.deepEqual(err.map((c) => c.node), ['Nudge by template'], 'error output must reach a sendable path');
+});
+
+test('the closed-window branch of the nudge uses a template, not free text', () => {
+  const [open, closed] = wf.connections['Can we message freely?'].main;
+  assert.deepEqual(open.map((c) => c.node), ['Write the nudge']);
+  assert.deepEqual(closed.map((c) => c.node), ['Nudge by template']);
+  const tmpl = wf.nodes.find((n) => n.name === 'Nudge by template');
+  assert.equal(tmpl.parameters.operation, 'sendTemplate');
+});
+
+test('one model node backs both AI steps', () => {
+  const targets = wf.connections['Claude'].ai_languageModel.flat().map((c) => c.node);
+  assert.deepEqual(targets.sort(), ['Read it with Claude', 'Write the nudge']);
+});
+
 test('the model branch degrades instead of dropping the answer', () => {
   const extractor = wf.nodes.find((n) => n.name === 'Read it with Claude');
   assert.equal(extractor.onError, 'continueErrorOutput');
@@ -94,13 +121,22 @@ test('status-only webhooks do not wake the reply workflow', () => {
   assert.deepEqual(trigger.parameters.options.messageStatusUpdates, []);
 });
 
-test('both writes to the Log tab upsert on the same key', () => {
-  for (const name of ['Log the ask', 'Record the answer']) {
+test('every write to the Log tab upserts on the same key', () => {
+  for (const name of ['Log the goal', 'Log the nudge', 'Record the answer']) {
     const node = wf.nodes.find((n) => n.name === name);
     assert.equal(node.parameters.operation, 'appendOrUpdate');
     assert.deepEqual(node.parameters.columns.matchingColumns, ['key']);
     assert.equal(node.parameters.sheetName.value, 'Log');
   }
+});
+
+test('the README quotes the right number of nodes per placeholder', () => {
+  const count = (type) => wf.nodes.filter((n) => n.type === type).length;
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, new RegExp(`on all eight Sheets nodes`));
+  assert.equal(count('n8n-nodes-base.googleSheets'), 8);
+  assert.match(readme, new RegExp(`on all six WhatsApp nodes`));
+  assert.equal(count('n8n-nodes-base.whatsApp'), 6);
 });
 
 test('every placeholder is spelled the way the README says', () => {
@@ -115,10 +151,10 @@ test('every placeholder is spelled the way the README says', () => {
 test('the shape the README describes is the shape on the canvas', () => {
   const count = (type) => wf.nodes.filter((n) => n.type === type).length;
   const sticky = count('n8n-nodes-base.stickyNote');
-  assert.equal(wf.nodes.length - sticky, 24, 'README says twenty-four nodes');
-  assert.equal(sticky, 3, 'README says three sticky notes');
-  assert.equal(count('n8n-nodes-base.googleSheets'), 6, 'README says six Sheets nodes');
-  assert.equal(count('n8n-nodes-base.whatsApp'), 4, 'README says four WhatsApp nodes');
+  assert.equal(wf.nodes.length - sticky, 33, 'README says thirty-three nodes');
+  assert.equal(sticky, 4, 'README says four sticky notes');
+  assert.equal(count('n8n-nodes-base.googleSheets'), 8, 'README says eight Sheets nodes');
+  assert.equal(count('n8n-nodes-base.whatsApp'), 6, 'README says six WhatsApp nodes');
 });
 
 test('no credentials were exported with the workflow', () => {

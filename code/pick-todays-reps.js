@@ -1,8 +1,8 @@
-// Roster rows in, one nudge per active rep out.
+// Roster rows in, one morning goal per active rep out.
 //
-// The date key is built here and nowhere else. The reply workflow rebuilds the
-// same key from the inbound message, which is how an answer finds the row its
-// question created instead of appending a second one.
+// The date key is built here and nowhere else. The reply and nudge workflows
+// rebuild the same key, which is how an answer finds the row its goal created
+// instead of appending a second one.
 const ZONE = 'Europe/Helsinki';
 
 const today = $now.setZone(ZONE);
@@ -32,7 +32,7 @@ for (const item of $input.all()) {
       phone,
       target,
       calls: '',
-      status: 'asked',
+      status: 'goal_set',
       note: '',
       raw_reply: '',
       logged_at: today.toISO(),

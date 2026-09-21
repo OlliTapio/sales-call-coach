@@ -7,6 +7,7 @@ import fs from 'node:fs';
 
 export const CODE_NODES = {
   "Pick today's reps": 'pick-todays-reps.js',
+  'Who still owes a number': 'who-still-owes-a-number.js',
   'Match rep & parse reply': 'match-rep-and-parse-reply.js',
   'Aggregate the week': 'aggregate-the-week.js',
   'Build the chart': 'build-the-chart.js',

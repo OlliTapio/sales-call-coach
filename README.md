@@ -1,7 +1,8 @@
 # Sales call tracker — WhatsApp → Google Sheets → chart
 
-An n8n workflow that asks a sales rep on WhatsApp whether they made their calls
-today, writes the answer to Google Sheets, and sends the coach a chart on Friday.
+An n8n workflow that gives a sales rep a daily call target on WhatsApp, chases
+the ones who go quiet, writes what they report to Google Sheets, and sends the
+coach a chart on Friday.
 
 ![Weekly chart sent to the coach: a horizontal progress-to-goal bar per rep, calls made against
 the weekly target](example-chart.png)
@@ -9,19 +10,26 @@ the weekly target](example-chart.png)
 *Sample data. Note the last two rows — one call and none at all still read clearly, because the
 number is on the axis and not inside a bar that isn't there.*
 
-Import `workflow.json`, fill in three placeholders, done. Twenty-four nodes across
-three lanes on one canvas, plus three sticky notes.
+Import `workflow.json`, fill in three placeholders, done. Thirty-three nodes
+across four lanes on one canvas, plus four sticky notes.
 
 ## What it does
 
-**1 · Ask** — weekdays at 16:30 Europe/Helsinki. Reads the `Roster` tab, keeps
-the people marked active, sends each one an approved WhatsApp template, and
-writes a row to `Log` with `status = asked` and an **empty** `calls` cell.
+**1 · Set the goal** — weekdays at 08:30 Europe/Helsinki. Reads the `Roster` tab,
+keeps the people marked active, and tells each one what today's target is. Nobody
+is asked anything yet; they report whenever suits them. The row goes to `Log`
+with `status = goal_set` and an **empty** `calls` cell.
+
+**1b · Nudge the quiet ones** — 16:30. Reads `Log`, keeps today's rows whose
+`calls` cell is still empty, and reminds only those people. Anyone who already
+reported hears nothing. Inside WhatsApp's 24-hour window Claude writes the nudge
+from the rep's last seven days; outside it, where free text is not allowed, the
+same nudge goes as an approved template.
 
 **2 · Collect** — the WhatsApp Trigger fires on the reply. `6`, `6/8`, `all` and
 `none` are parsed in code and cost nothing. Only the tail — *"did 6, two
 no-showed"* — goes to Claude. Either way the row is upserted onto the key the
-morning's nudge created, and the rep gets a one-line confirmation.
+morning's goal created, and the rep gets a one-line confirmation.
 
 **3 · Graph** — Fridays at 17:00. Aggregates the week per rep into the `Weekly`
 tab (per-day columns, so the client can chart it in the spreadsheet they already
@@ -55,19 +63,27 @@ workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
 2. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
    WhatsApp Business Cloud (`whatsAppApi`) and WhatsApp Trigger
    (`whatsAppTriggerApi`). A fourth, Anthropic, is needed only if you want the
-   model branch.
+   model branches (the nudge wording and the messy-reply parsing).
 3. **Replace three placeholders.** They are spelled exactly this way everywhere:
-   - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all six Sheets nodes
-   - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all four WhatsApp nodes
+   - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all eight Sheets nodes
+   - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all six WhatsApp nodes
    - `REPLACE_WITH_COACH_WHATSAPP_NUMBER` — who gets the Friday chart
-4. **Approve the message template** in Meta Business Manager. The workflow sends
-   `daily_sales_check` in `en`, category *Utility*, with two body variables:
+4. **Approve two message templates** in Meta Business Manager, both `en`,
+   category *Utility*, each with two body variables:
 
-   > Hi {{1}} — how many sales calls did you get done today? Your target is
-   > {{2}}. Reply with just the number.
+   `daily_sales_goal` — sent every morning:
 
-   Change the name in the **Ask on WhatsApp** node if you call yours something
-   else; the format is `name|language`.
+   > Morning {{1}} — today's goal is {{2}} sales calls. Reply any time with how
+   > many you've done.
+
+   `daily_sales_nudge` — the end-of-day reminder, used whenever the rep is
+   outside the 24-hour window:
+
+   > Hi {{1}} — nothing logged for today yet. How many of your {{2}} calls did
+   > you get done?
+
+   Change the names in **Send today's goal** and **Nudge by template** if you
+   call yours something else; the format is `name|language`.
 5. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
    nothing else can subscribe to the same app.
 
@@ -78,10 +94,24 @@ and run lane 1 manually.
 
 Things here were decided deliberately, and most of them the hard way.
 
-**A blank is not a zero.** Lane 1 writes the row when the question goes out, so
-the report can tell "said zero" from "never answered". `asked` and `answered` are
-counted separately all the way through, and a silent day leaves the day column
-empty rather than plotting a 0.
+**A blank is not a zero.** Lane 1 writes the row when the goal goes out, so the
+report can tell "said zero" from "never answered" — and so lane 1b knows who to
+chase. `asked` and `answered` are counted separately all the way through, and a
+silent day leaves the day column empty rather than plotting a 0.
+
+**Only the quiet ones get chased.** The nudge is driven off that empty cell, not
+off a list of everyone. Report at 09:00 and you never hear from it again that
+day. Re-running the lane will not nudge the same person twice, because the row
+it writes back is marked `nudged` and the code skips those.
+
+**The 24-hour window decides the nudge, not preference.** WhatsApp allows
+free-form text only within 24 hours of the person's own last message; outside it
+a business-initiated message must be an approved template with fixed wording.
+**Who still owes a number** works out which case applies from the log's own reply
+timestamps, and the two send paths diverge on it. Claude writes the message on
+the open-window path, from the rep's last seven days — a rolling seven, not the
+calendar week, because on a Monday a calendar week holds nothing but today and
+every rep would be greeted as if they had just joined.
 
 **One key, written twice.** `date|phone` is built in lane 1 and rebuilt from the
 inbound message in lane 2. Both writes are `appendOrUpdate` matching on it, so an
@@ -99,10 +129,13 @@ number, so *"tomorrow I'll do 8"* is not logged as eight calls today. Keeping
 the model on the tail also keeps the thing debuggable — most executions never
 touch it.
 
-**The model branch degrades, it doesn't drop.** **Read it with Claude** is set to
-*continue using error output*. No Anthropic credential, rate limit, bad day — the
-rep gets "reply with a plain number" instead of silence. The workflow is useful
-with the AI node disconnected entirely; it just asks again more often.
+**Both model branches degrade, they don't drop.** **Read it with Claude** and
+**Write the nudge** are set to *continue using error output*. No Anthropic
+credential, rate limit, bad day — the rep gets "reply with a plain number", or
+the template nudge, instead of silence. The workflow is useful with the AI nodes
+disconnected entirely; it just asks again more often and sounds more robotic.
+One **Claude** node backs both steps, so there is a single place to change model
+or effort.
 
 **Two surfaces, two jobs.** The per-day detail goes to the spreadsheet, where a
 client can pivot it however they like. WhatsApp gets one progress-to-goal bar per

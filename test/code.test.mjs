@@ -37,9 +37,9 @@ test('pick: per-rep target is carried, with a fallback of 8', () => {
   assert.equal(picked[2].target, 8);
 });
 
-test('pick: the ask is logged with an empty calls cell, not a zero', () => {
+test('pick: the goal is logged with an empty calls cell, not a zero', () => {
   assert.equal(picked[0].calls, '');
-  assert.equal(picked[0].status, 'asked');
+  assert.equal(picked[0].status, 'goal_set');
 });
 
 // ---------------------------------------------------------------------------
@@ -136,6 +136,111 @@ test('parse: several messages in one webhook delivery all get rows', () => {
     ['Anna Virtanen', 6],
     ['Mikko Laine', 9],
   ]);
+});
+
+
+// ---------------------------------------------------------------------------
+// Who still owes a number
+// ---------------------------------------------------------------------------
+const NUDGE_NOW = DateTime.fromISO('2026-09-18T16:30:00', { zone: ZONE }); // Friday
+
+const row = (over = {}) => ({
+  key: `${over.date}|${over.phone}`, weekday: 'Fri', target: 8, calls: '',
+  status: 'goal_set', note: '', raw_reply: '', logged_at: '', ...over,
+});
+
+// Anna replied yesterday at 18:30 — 22h ago, so the window is still open.
+// Joonas has never replied. Mikko already reported today. Sofia was nudged already.
+const NUDGE_LOG = [
+  row({ date: '2026-09-17', name: 'Anna', phone: '358401234567', calls: 6,
+        status: 'answered', raw_reply: '6', logged_at: '2026-09-17T18:30:00.000+03:00' }),
+  row({ date: '2026-09-18', name: 'Anna', phone: '358401234567' }),
+  row({ date: '2026-09-18', name: 'Mikko', phone: '358401234568', calls: 9, status: 'answered',
+        raw_reply: '9', logged_at: '2026-09-18T11:00:00.000+03:00' }),
+  row({ date: '2026-09-18', name: 'Sofia', phone: '358401234569', status: 'nudged' }),
+  row({ date: '2026-09-18', name: 'Joonas', phone: '358401234570' }),
+  row({ date: '2026-09-15', name: 'Joonas', phone: '358401234570', calls: 2, status: 'answered',
+        raw_reply: '2', logged_at: '2026-09-15T18:00:00.000+03:00' }),
+];
+
+const nudges = runCode('who-still-owes-a-number.js', { items: NUDGE_LOG, now: NUDGE_NOW })
+  .map((item) => item.json);
+
+test('nudge: only today\'s unanswered, un-nudged people', () => {
+  assert.deepEqual(nudges.map((n) => n.name), ['Anna', 'Joonas']);
+});
+
+test('nudge: a reply inside 24h leaves the free-text window open', () => {
+  const anna = nudges.find((n) => n.name === 'Anna');
+  assert.equal(anna.window_open, true);
+  assert.equal(anna.hours_since_last_reply, 22); // 18:30 yesterday -> 16:30 today
+});
+
+test('nudge: a reply older than 24h closes the window, so a template is required', () => {
+  const joonas = nudges.find((n) => n.name === 'Joonas');
+  assert.equal(joonas.window_open, false);
+  assert.ok(joonas.hours_since_last_reply > 24);
+});
+
+test('nudge: someone who has never replied has no open window', () => {
+  const never = runCode('who-still-owes-a-number.js', {
+    items: [row({ date: '2026-09-18', name: 'New', phone: '358409999999' })],
+    now: NUDGE_NOW,
+  })[0].json;
+  assert.equal(never.window_open, false);
+  assert.equal(never.hours_since_last_reply, null);
+});
+
+test('nudge: re-running the lane does not nudge the same person twice', () => {
+  const after = runCode('who-still-owes-a-number.js', {
+    items: NUDGE_LOG.map((r) => (r.name === 'Anna' && r.date === '2026-09-18'
+      ? { ...r, status: 'nudged' } : r)),
+    now: NUDGE_NOW,
+  }).map((i) => i.json.name);
+  assert.deepEqual(after, ['Joonas']);
+});
+
+test('nudge: the row updates the goal row rather than adding a new one', () => {
+  const anna = nudges.find((n) => n.name === 'Anna');
+  assert.equal(anna.key, '2026-09-18|358401234567');
+  assert.equal(anna.status, 'nudged');
+  assert.equal(anna.calls, '');
+});
+
+test('nudge: the model is handed the run-up, not just the day', () => {
+  const anna = nudges.find((n) => n.name === 'Anna');
+  // Yesterday only; today is excluded because today is the thing being asked about.
+  assert.match(anna.context, /^Last 7 days: reported on 1 of 1 days, 6 calls against a target of 8/);
+});
+
+test('nudge: context is a rolling week, so Monday is not treated as day one', () => {
+  const monday = DateTime.fromISO('2026-09-21T16:30:00', { zone: ZONE });
+  const [only] = runCode('who-still-owes-a-number.js', {
+    items: [
+      row({ date: '2026-09-18', name: 'Anna', phone: '358401234567', calls: 7,
+            status: 'answered', raw_reply: '7', logged_at: '2026-09-18T18:30:00.000+03:00' }),
+      row({ date: '2026-09-21', name: 'Anna', phone: '358401234567' }),
+    ],
+    now: monday,
+  }).map((i) => i.json);
+  assert.match(only.context, /^Last 7 days: reported on 1 of 1 days/);
+});
+
+test('nudge: a first-day rep gets a context line that says so', () => {
+  const first = runCode('who-still-owes-a-number.js', {
+    items: [row({ date: '2026-09-18', name: 'New', phone: '358409999999' })],
+    now: NUDGE_NOW,
+  })[0].json;
+  assert.equal(first.context, 'First day being tracked.');
+});
+
+test('nudge: nobody owes anything -> nothing is sent', () => {
+  const none = runCode('who-still-owes-a-number.js', {
+    items: [row({ date: '2026-09-18', name: 'Mikko', phone: '358401234568', calls: 9,
+                  status: 'answered', raw_reply: '9', logged_at: '2026-09-18T11:00:00.000+03:00' })],
+    now: NUDGE_NOW,
+  });
+  assert.equal(none.length, 0);
 });
 
 // ---------------------------------------------------------------------------
