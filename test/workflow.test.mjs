@@ -1,0 +1,121 @@
+// Structural checks on the exported workflow. These are the mistakes that only
+// surface after you import into n8n and press Execute: a connection to a node
+// that was renamed, an expression pointing at a node that no longer exists, a
+// placeholder that shipped.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readWorkflow, drift } from '../sync-code.mjs';
+
+const wf = readWorkflow();
+const names = new Set(wf.nodes.map((n) => n.name));
+
+test('code/ and workflow.json have not drifted apart', () => {
+  assert.deepEqual(drift(), []);
+});
+
+test('node names and ids are unique', () => {
+  assert.equal(names.size, wf.nodes.length);
+  assert.equal(new Set(wf.nodes.map((n) => n.id)).size, wf.nodes.length);
+});
+
+test('every connection points at a node that exists', () => {
+  for (const [src, kinds] of Object.entries(wf.connections)) {
+    assert.ok(names.has(src), `connection from unknown node ${src}`);
+    for (const [kind, outputs] of Object.entries(kinds)) {
+      for (const targets of outputs) {
+        for (const t of targets) {
+          assert.ok(names.has(t.node), `${src} -> unknown node ${t.node}`);
+          assert.equal(t.type, kind, `${src} -> ${t.node} has the wrong connection type`);
+        }
+      }
+    }
+  }
+});
+
+test('every $(\'node\') expression names a node that exists', () => {
+  const refs = new Set([...JSON.stringify(wf).matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]));
+  for (const ref of refs) assert.ok(names.has(ref), `expression references unknown node ${ref}`);
+});
+
+test('every node is reachable from a trigger or attached as a sub-node', () => {
+  const STANDALONE = new Set([
+    'n8n-nodes-base.scheduleTrigger',
+    'n8n-nodes-base.whatsAppTrigger',
+    'n8n-nodes-base.stickyNote',
+  ]);
+  const targets = new Set(
+    Object.values(wf.connections).flatMap((kinds) =>
+      Object.values(kinds).flat(2).map((t) => t.node)));
+  const subNodes = new Set(
+    Object.entries(wf.connections)
+      .filter(([, kinds]) => Object.keys(kinds).some((k) => k !== 'main'))
+      .map(([src]) => src));
+
+  for (const node of wf.nodes) {
+    if (STANDALONE.has(node.type)) continue;
+    assert.ok(targets.has(node.name) || subNodes.has(node.name), `${node.name} is orphaned`);
+  }
+});
+
+test('expressions have balanced braces', () => {
+  const walk = (value, path) => {
+    if (Array.isArray(value)) value.forEach((v, i) => walk(v, `${path}[${i}]`));
+    else if (value && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value)) walk(v, `${path}.${k}`);
+    } else if (typeof value === 'string' && value.startsWith('=')) {
+      assert.equal(value.split('{{').length, value.split('}}').length, `unbalanced at ${path}`);
+    }
+  };
+  for (const node of wf.nodes) walk(node.parameters, node.name);
+});
+
+test('the model branch degrades instead of dropping the answer', () => {
+  const extractor = wf.nodes.find((n) => n.name === 'Read it with Claude');
+  assert.equal(extractor.onError, 'continueErrorOutput');
+  const [, errorBranch] = wf.connections['Read it with Claude'].main;
+  assert.deepEqual(errorBranch.map((t) => t.node), ['Ask for a plain number']);
+});
+
+test('the roster is read once per reply, not once per message', () => {
+  const roster = wf.nodes.find((n) => n.name === 'Get the roster (reply)');
+  assert.equal(roster.executeOnce, true);
+});
+
+test('status-only webhooks do not wake the reply workflow', () => {
+  const trigger = wf.nodes.find((n) => n.name === 'WhatsApp Trigger');
+  assert.deepEqual(trigger.parameters.updates, ['messages']);
+  assert.deepEqual(trigger.parameters.options.messageStatusUpdates, []);
+});
+
+test('both writes to the Log tab upsert on the same key', () => {
+  for (const name of ['Log the ask', 'Record the answer']) {
+    const node = wf.nodes.find((n) => n.name === name);
+    assert.equal(node.parameters.operation, 'appendOrUpdate');
+    assert.deepEqual(node.parameters.columns.matchingColumns, ['key']);
+    assert.equal(node.parameters.sheetName.value, 'Log');
+  }
+});
+
+test('every placeholder is spelled the way the README says', () => {
+  const found = new Set([...JSON.stringify(wf).matchAll(/REPLACE_WITH_[A-Z_]+/g)].map((m) => m[0]));
+  assert.deepEqual([...found].sort(), [
+    'REPLACE_WITH_COACH_WHATSAPP_NUMBER',
+    'REPLACE_WITH_PHONE_NUMBER_ID',
+    'REPLACE_WITH_SPREADSHEET_ID',
+  ]);
+});
+
+test('the shape the README describes is the shape on the canvas', () => {
+  const count = (type) => wf.nodes.filter((n) => n.type === type).length;
+  const sticky = count('n8n-nodes-base.stickyNote');
+  assert.equal(wf.nodes.length - sticky, 24, 'README says twenty-four nodes');
+  assert.equal(sticky, 3, 'README says three sticky notes');
+  assert.equal(count('n8n-nodes-base.googleSheets'), 6, 'README says six Sheets nodes');
+  assert.equal(count('n8n-nodes-base.whatsApp'), 4, 'README says four WhatsApp nodes');
+});
+
+test('no credentials were exported with the workflow', () => {
+  for (const node of wf.nodes) {
+    assert.equal(node.credentials, undefined, `${node.name} carries a credential reference`);
+  }
+});

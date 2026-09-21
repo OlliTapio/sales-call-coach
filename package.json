@@ -1,0 +1,13 @@
+{
+  "name": "sales-call-tracker",
+  "private": true,
+  "type": "module",
+  "description": "n8n workflow: WhatsApp daily sales-call check-in -> Google Sheets -> weekly chart",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "sync": "node sync-code.mjs"
+  },
+  "devDependencies": {
+    "luxon": "^3.5.0"
+  }
+}

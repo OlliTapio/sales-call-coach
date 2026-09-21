@@ -1,0 +1,1019 @@
+{
+  "name": "Sales call tracker - WhatsApp to Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1 · Ask, every weekday at 16:30\nReads the **Roster** tab, keeps the people marked active, and sends each one an approved WhatsApp template.\n\nThe row is written to the **Log** tab straight away with `status = asked` and an empty `calls` cell. That is what makes a *silent* day visible later — a blank is not a zero.\n\n`key` (`date|phone`) is built here and rebuilt by lane 2, so the answer updates this row instead of appending a second one.",
+        "height": 200,
+        "width": 1120,
+        "color": 4
+      },
+      "id": "ecb2a9fe-a885-5065-854a-b8ef350573c9",
+      "name": "Lane 1 note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "triggerAtHour": 16,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "75fa7ed5-f323-5aa2-93a1-3968a7b5afc9",
+      "name": "Weekdays 16:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -240,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SPREADSHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Roster"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        }
+      },
+      "id": "146faca8-88fc-5c54-b311-7695653f593b",
+      "name": "Get the roster",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -20,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Roster rows in, one nudge per active rep out.\n//\n// The date key is built here and nowhere else. The reply workflow rebuilds the\n// same key from the inbound message, which is how an answer finds the row its\n// question created instead of appending a second one.\nconst ZONE = 'Europe/Helsinki';\n\nconst today = $now.setZone(ZONE);\nconst dateKey = today.toFormat('yyyy-MM-dd');\n\nconst asks = [];\n\nfor (const item of $input.all()) {\n  const rep = item.json;\n\n  const active = String(rep.active ?? '').trim().toLowerCase();\n  if (!['true', 'yes', '1', 'x'].includes(active)) continue;\n\n  // Sheets hands phone numbers back as text or as a number, with or without\n  // a +. WhatsApp always reports the sender as bare digits, so normalise to that.\n  const phone = String(rep.phone ?? '').replace(/\\D/g, '');\n  if (!phone) continue;\n\n  const target = Number(rep.daily_target) || 8;\n\n  asks.push({\n    json: {\n      key: `${dateKey}|${phone}`,\n      date: dateKey,\n      weekday: today.toFormat('ccc'),\n      name: String(rep.name ?? '').trim() || phone,\n      phone,\n      target,\n      calls: '',\n      status: 'asked',\n      note: '',\n      raw_reply: '',\n      logged_at: today.toISO(),\n    },\n  });\n}\n\nreturn asks;"
+      },
+      "id": "3ed99b80-f099-500f-8b09-2bba0d2a89de",
+      "name": "Pick today's reps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendTemplate",
+        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "template": "daily_sales_check|en",
+        "components": {
+          "component": [
+            {
+              "type": "body",
+              "bodyParameters": {
+                "parameter": [
+                  {
+                    "type": "text",
+                    "text": "={{ $json.name }}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "={{ $json.target }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "7699f856-7b42-57d6-a1a4-8fb0b377dc03",
+      "name": "Ask on WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        420,
+        40
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SPREADSHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.key }}",
+            "date": "={{ $json.date }}",
+            "weekday": "={{ $json.weekday }}",
+            "name": "={{ $json.name }}",
+            "phone": "={{ $json.phone }}",
+            "target": "={{ $json.target }}",
+            "calls": "={{ $json.calls }}",
+            "status": "={{ $json.status }}",
+            "note": "={{ $json.note }}",
+            "raw_reply": "={{ $json.raw_reply }}",
+            "logged_at": "={{ $json.logged_at }}"
+          },
+          "matchingColumns": [
+            "key"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "bd198e9f-f6d1-5c37-b7af-80de65f92f77",
+      "name": "Log the ask",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        640,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2 · Collect the reply\nCheap path first: a bare number, \"all\" or \"none\" is parsed in code and costs nothing. Only the tail — *\"did 6, two no-shows\"* — reaches the model.\n\n**Read it with Claude** is set to *continue using error output*, so a missing Anthropic credential degrades to \"reply with a plain number\" instead of dropping the answer.\n\nThe upsert matches on `key`, so a reply lands on the row this morning's nudge created.",
+        "height": 220,
+        "width": 1120,
+        "color": 4
+      },
+      "id": "f1791984-b6d4-5da4-ad17-e39b4e2e03c0",
+      "name": "Lane 2 note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {
+          "messageStatusUpdates": []
+        }
+      },
+      "id": "43b427d4-2148-58f9-b8b5-4dbe54e41774",
+      "name": "WhatsApp Trigger",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2533091a-3b2e-44e7-9da9-baca6945ed02",
+              "leftValue": "={{ ($json.messages || []).filter(m => m.type === 'text').length }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "533203df-63be-560a-9aa2-6366a1bf7dca",
+      "name": "Is it a text reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -20,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SPREADSHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Roster"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        }
+      },
+      "id": "400b6089-171e-5dc0-8ffa-deae0382b72b",
+      "name": "Get the roster (reply)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        200,
+        580
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// One output item per inbound text message from someone on the roster.\n//\n// Deterministic parse first, model second. A bare number, \"all\" or \"none\"\n// covers almost every reply and costs nothing; only the tail — \"did 6, two\n// no-shows\" — reaches the LLM branch. Putting the cheap path first is also\n// what keeps this debuggable: most executions never touch a model at all.\nconst ZONE = 'Europe/Helsinki';\n\n// A reply typed at 00:30 is about the day that just ended, not the new one.\nconst DAY_ROLLOVER_HOUR = 4;\n\nconst ALL_WORDS = ['all', 'all of them', 'yes', 'yep', 'yup', 'done', 'all done', 'kaikki', 'joo', 'kyllä'];\nconst NONE_WORDS = ['none', 'no', 'nope', 'zero', '0', 'ei', 'en yhtään'];\n\nfunction parse(text, target) {\n  const clean = text.trim().toLowerCase();\n\n  if (ALL_WORDS.includes(clean)) return { calls: target, how: 'all' };\n  if (NONE_WORDS.includes(clean)) return { calls: 0, how: 'none' };\n\n  // Only trust a bare number when the message is essentially just that number\n  // (\"6\", \"6/8\", \"6 calls\"). A longer sentence goes to the model, so that\n  // \"tomorrow I'll do 8\" is not logged as eight calls today.\n  if (clean.length <= 12) {\n    const match = clean.match(/(?<!\\d)(\\d{1,3})(?!\\d)/);\n    if (match) {\n      const n = Number(match[1]);\n      if (n >= 0 && n <= 100) return { calls: n, how: 'number' };\n    }\n  }\n\n  return { calls: null, how: 'unparsed' };\n}\n\n// The roster arrives on this node's input; the messages come from the trigger.\nconst roster = new Map();\nfor (const item of $input.all()) {\n  const phone = String(item.json.phone ?? '').replace(/\\D/g, '');\n  if (phone) roster.set(phone, item.json);\n}\n\nconst out = [];\n\nfor (const event of $('WhatsApp Trigger').all()) {\n  for (const message of event.json.messages ?? []) {\n    if (message.type !== 'text') continue;\n\n    const phone = String(message.from ?? '').replace(/\\D/g, '');\n    const rep = roster.get(phone);\n\n    // Someone not on the roster messaged the business number. Not ours to log.\n    if (!rep) continue;\n\n    const text = String(message.text?.body ?? '').trim();\n    const target = Number(rep.daily_target) || 8;\n\n    const stamp = Number(message.timestamp);\n    const receivedAt = Number.isFinite(stamp) && stamp > 0\n      ? DateTime.fromSeconds(stamp).setZone(ZONE)\n      : $now.setZone(ZONE);\n\n    const forDay = receivedAt.hour < DAY_ROLLOVER_HOUR\n      ? receivedAt.minus({ days: 1 })\n      : receivedAt;\n\n    const dateKey = forDay.toFormat('yyyy-MM-dd');\n    const { calls, how } = parse(text, target);\n\n    out.push({\n      json: {\n        key: `${dateKey}|${phone}`,\n        date: dateKey,\n        weekday: forDay.toFormat('ccc'),\n        name: String(rep.name ?? '').trim() || phone,\n        phone,\n        target,\n        calls: calls === null ? '' : calls,\n        status: calls === null ? 'unparsed' : 'answered',\n        note: how,\n        raw_reply: text,\n        logged_at: receivedAt.toISO(),\n        parsed: calls !== null,\n        message_id: message.id ?? '',\n      },\n    });\n  }\n}\n\nreturn out;"
+      },
+      "id": "9715adb1-310c-5c95-919b-760e730a51ae",
+      "name": "Match rep & parse reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "01bc5649-d7c4-47b9-ad5f-04cfb5cc4fb2",
+              "leftValue": "={{ $json.parsed }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5281a74c-70a6-51a7-a00d-82e8105c0828",
+      "name": "Understood the reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        640,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.raw_reply }}",
+        "schemaType": "fromAttributes",
+        "attributes": {
+          "attributes": [
+            {
+              "name": "calls",
+              "type": "number",
+              "required": false,
+              "description": "=Number of sales calls the person says they completed today. Their daily target is {{ $json.target }}; if they say they did all of them, that is the number. Count only calls already made — ignore calls they plan to make later. Leave empty if no count can be determined from the message."
+            },
+            {
+              "name": "note",
+              "type": "string",
+              "required": false,
+              "description": "Anything the person said about why, in at most six words (for example 'two no-shows' or 'sick'). Empty if they gave no reason."
+            }
+          ]
+        },
+        "options": {
+          "systemPromptTemplate": "You are reading a sales rep's WhatsApp reply to \"how many calls did you make today?\". Extract only what the message actually states. Do not guess a number."
+        }
+      },
+      "id": "3f17ba15-c1db-5fa0-86c8-f26862484e1c",
+      "name": "Read it with Claude",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        860,
+        740
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-opus-5",
+          "cachedResultName": "Claude Opus 5"
+        },
+        "options": {
+          "maxTokensToSample": 2048,
+          "thinkingMode": "adaptive",
+          "effort": "low"
+        }
+      },
+      "id": "f41dbbee-ffa1-5b96-81cd-15911e9e2c8f",
+      "name": "Claude",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        860,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "50f89e01-772d-5797-913f-62bc58d53c35",
+              "name": "key",
+              "value": "={{ $('Match rep & parse reply').item.json.key }}",
+              "type": "string"
+            },
+            {
+              "id": "1c9a77d8-581c-59b9-befc-3e3f67f5c2e5",
+              "name": "date",
+              "value": "={{ $('Match rep & parse reply').item.json.date }}",
+              "type": "string"
+            },
+            {
+              "id": "d133c11a-e002-594c-a411-5fd8d62dcede",
+              "name": "weekday",
+              "value": "={{ $('Match rep & parse reply').item.json.weekday }}",
+              "type": "string"
+            },
+            {
+              "id": "f6dc0ad9-c990-5a01-b642-84c446592ab2",
+              "name": "name",
+              "value": "={{ $('Match rep & parse reply').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "734be535-2b74-5436-9e2c-df5ac060ed4c",
+              "name": "phone",
+              "value": "={{ $('Match rep & parse reply').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "9630cc65-47e4-5e11-b099-0b531b253f26",
+              "name": "target",
+              "value": "={{ $('Match rep & parse reply').item.json.target }}",
+              "type": "number"
+            },
+            {
+              "id": "ba02b5a7-45c3-5540-bd3f-39596c7cfcbb",
+              "name": "calls",
+              "value": "={{ $json.output?.calls ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "cae7e56a-0e0c-53fd-bf6f-135fec08423e",
+              "name": "status",
+              "value": "={{ ($json.output?.calls ?? null) === null ? 'unparsed' : 'answered' }}",
+              "type": "string"
+            },
+            {
+              "id": "51b6d215-2fac-5774-a73b-8665f6c51cbc",
+              "name": "note",
+              "value": "={{ $json.output?.note || 'read by model' }}",
+              "type": "string"
+            },
+            {
+              "id": "08632df0-8ac5-5d41-8304-b5153fc51284",
+              "name": "raw_reply",
+              "value": "={{ $('Match rep & parse reply').item.json.raw_reply }}",
+              "type": "string"
+            },
+            {
+              "id": "bd3976ce-78e1-5a0d-b801-b09acc416619",
+              "name": "logged_at",
+              "value": "={{ $('Match rep & parse reply').item.json.logged_at }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4e5b8970-fbd5-5816-a059-f57e082d60ff",
+      "name": "Apply the model's answer",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1080,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6aab6d17-968e-4a79-8dab-cfcddc8c2893",
+              "leftValue": "={{ ($json.calls === '' || $json.calls === null || $json.calls === undefined) ? -1 : Number($json.calls) }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b61fea5f-4340-5b18-9080-f2e25951ff63",
+      "name": "Have a number?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1300,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SPREADSHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.key }}",
+            "date": "={{ $json.date }}",
+            "weekday": "={{ $json.weekday }}",
+            "name": "={{ $json.name }}",
+            "phone": "={{ $json.phone }}",
+            "target": "={{ $json.target }}",
+            "calls": "={{ $json.calls }}",
+            "status": "={{ $json.status }}",
+            "note": "={{ $json.note }}",
+            "raw_reply": "={{ $json.raw_reply }}",
+            "logged_at": "={{ $json.logged_at }}"
+          },
+          "matchingColumns": [
+            "key"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "4bd29795-0aeb-5b27-a12b-af464fa638ad",
+      "name": "Record the answer",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1520,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Have a number?').item.json.phone }}",
+        "messageType": "text",
+        "textBody": "=Logged {{ Number($('Have a number?').item.json.calls) }}/{{ $('Have a number?').item.json.target }} for {{ $('Have a number?').item.json.weekday }} {{ $('Have a number?').item.json.date }}. {{ Number($('Have a number?').item.json.calls) >= Number($('Have a number?').item.json.target) ? 'Target hit.' : (Number($('Have a number?').item.json.target) - Number($('Have a number?').item.json.calls)) + ' short of target.' }}"
+      },
+      "id": "33bdc2ce-f5d1-5593-8138-1685174a64f0",
+      "name": "Confirm it landed",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1740,
+        480
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Match rep & parse reply').item.json.phone }}",
+        "messageType": "text",
+        "textBody": "=Sorry, I couldn't read a number out of that. How many sales calls did you get done today? Just the number is fine (0-{{ $('Match rep & parse reply').item.json.target }})."
+      },
+      "id": "3ec3e33f-4956-5d76-979a-457f557de567",
+      "name": "Ask for a plain number",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1520,
+        880
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "content": "## 3 · Graph it, Fridays at 17:00\nTwo surfaces, two jobs. The **Weekly** tab gets the per-day detail, so the client can pivot and chart it in the spreadsheet they already live in. WhatsApp gets a single progress-to-goal bar, which is the only shape that still reads on a phone as the roster grows.\n\nThe chart is a Chart.js config rendered by QuickChart — the same config drops into a web dashboard later without rewriting the aggregation.",
+        "height": 200,
+        "width": 1120,
+        "color": 4
+      },
+      "id": "d6058bb0-8e4a-588d-84b4-0670477bf28f",
+      "name": "Lane 3 note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                5
+              ],
+              "triggerAtHour": 17,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "0030109e-674a-5167-b65f-3e6515e149a6",
+      "name": "Fridays 17:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -240,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SPREADSHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Log"
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        }
+      },
+      "id": "e6e0e5e9-a44a-5e7f-a1f0-94b68768358f",
+      "name": "Read the log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -20,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Every log row in, one row per rep for the current week out.\n//\n// \"asked\" and \"answered\" are counted separately on purpose: a silent day is\n// not a zero-call day, and a coach needs to see which one they are looking at.\nconst ZONE = 'Europe/Helsinki';\n\nconst now = $now.setZone(ZONE);\nconst weekStart = now.startOf('week');\nconst weekEnd = weekStart.plus({ days: 6 }).endOf('day');\nconst weekLabel = now.toFormat(\"kkkk-'W'WW\");\n\nconst DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];\n\nconst byRep = new Map();\n\nfor (const item of $input.all()) {\n  const row = item.json;\n\n  const date = DateTime.fromFormat(String(row.date ?? ''), 'yyyy-MM-dd', { zone: ZONE });\n  if (!date.isValid || date < weekStart || date > weekEnd) continue;\n\n  const phone = String(row.phone ?? '').replace(/\\D/g, '');\n  if (!phone) continue;\n\n  if (!byRep.has(phone)) {\n    byRep.set(phone, {\n      name: String(row.name ?? '').trim() || phone,\n      phone,\n      asked: 0,\n      answered: 0,\n      calls: 0,\n      target_total: 0,\n      hit_days: 0,\n      days: {},\n    });\n  }\n\n  const rep = byRep.get(phone);\n  const target = Number(row.target) || 0;\n\n  rep.asked += 1;\n  rep.target_total += target;\n\n  // An empty cell means the nudge went out and nothing came back.\n  const answer = row.calls;\n  const calls = answer === '' || answer === null || answer === undefined ? null : Number(answer);\n\n  if (calls !== null && Number.isFinite(calls)) {\n    rep.answered += 1;\n    rep.calls += calls;\n    if (target > 0 && calls >= target) rep.hit_days += 1;\n    rep.days[DAY_KEYS[date.weekday - 1]] = calls;\n  }\n}\n\nreturn [...byRep.values()]\n  .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name))\n  .map((rep) => ({\n    json: {\n      id: `${weekLabel}|${rep.phone}`,\n      week: weekLabel,\n      week_starting: weekStart.toFormat('yyyy-MM-dd'),\n      name: rep.name,\n      phone: rep.phone,\n      mon: rep.days.mon ?? '',\n      tue: rep.days.tue ?? '',\n      wed: rep.days.wed ?? '',\n      thu: rep.days.thu ?? '',\n      fri: rep.days.fri ?? '',\n      asked: rep.asked,\n      answered: rep.answered,\n      calls: rep.calls,\n      target_total: rep.target_total,\n      hit_days: rep.hit_days,\n      pct_of_target: rep.target_total > 0 ? Math.round((rep.calls / rep.target_total) * 100) : 0,\n    },\n  }));"
+      },
+      "id": "dd671a69-9e9c-53ed-8741-07309af53f50",
+      "name": "Aggregate the week",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_SPREADSHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Weekly"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "week": "={{ $json.week }}",
+            "week_starting": "={{ $json.week_starting }}",
+            "name": "={{ $json.name }}",
+            "phone": "={{ $json.phone }}",
+            "mon": "={{ $json.mon }}",
+            "tue": "={{ $json.tue }}",
+            "wed": "={{ $json.wed }}",
+            "thu": "={{ $json.thu }}",
+            "fri": "={{ $json.fri }}",
+            "asked": "={{ $json.asked }}",
+            "answered": "={{ $json.answered }}",
+            "calls": "={{ $json.calls }}",
+            "target_total": "={{ $json.target_total }}",
+            "hit_days": "={{ $json.hit_days }}",
+            "pct_of_target": "={{ $json.pct_of_target }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "412cb7f4-572f-574f-8230-2d21003a9710",
+      "name": "Write weekly totals",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        420,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Weekly rows in, one Chart.js config plus a caption out.\n//\n// Form: a horizontal progress-to-goal bar, one row per rep — calls made, then\n// the remainder of the target as a recessive track. It is the only shape that\n// stays readable on a phone as the roster grows, and the bar length answers the\n// coach's actual question (\"who is short, and by how much\") without a second axis.\n// The per-day detail is not thrown away: it goes to the Weekly tab, where the\n// client can chart it themselves.\nconst reps = $input.all().map((item) => item.json);\nif (reps.length === 0) return [];\n\nconst CALLS_MADE = '#2a78d6';  // categorical slot 1\nconst TO_TARGET = '#cfd0cb';   // a track, not a series — deliberately recessive\nconst INK = '#52514e';\nconst INK_STRONG = '#0b0b0b';\nconst GRID = '#ececea';\n\nconst week = reps[0].week;\n\nconst chart = {\n  type: 'horizontalBar',\n  data: {\n    // The value rides in the axis label rather than inside the bar: a rep on 0 or\n    // 1 calls has no bar to write in, and that is exactly the rep you need to read.\n    labels: reps.map((rep) => [rep.name, `${rep.calls} of ${rep.target_total}`]),\n    datasets: [\n      {\n        label: 'Calls made',\n        backgroundColor: CALLS_MADE,\n        data: reps.map((rep) => rep.calls),\n        // A 2px surface-coloured edge reads as a gap between the segments.\n        borderColor: '#ffffff',\n        borderWidth: 2,\n        barPercentage: 0.62,\n        categoryPercentage: 0.8,\n      },\n      {\n        label: 'Still to target',\n        backgroundColor: TO_TARGET,\n        data: reps.map((rep) => Math.max(0, rep.target_total - rep.calls)),\n        borderColor: '#ffffff',\n        borderWidth: 2,\n        barPercentage: 0.62,\n        categoryPercentage: 0.8,\n      },\n    ],\n  },\n  options: {\n    responsive: false,\n    defaultFontColor: INK,\n    defaultFontSize: 13,\n    title: {\n      display: true,\n      text: `Sales calls vs. weekly target — ${week}`,\n      fontColor: INK_STRONG,\n      fontSize: 17,\n      padding: 16,\n    },\n    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } },\n    // QuickChart auto-registers chartjs-plugin-datalabels, which would print a\n    // number inside every segment. The values are already on the axis, and a\n    // rep on 0 calls has no segment to print into.\n    plugins: { datalabels: { display: false } },\n    layout: { padding: { left: 8, right: 24, top: 0, bottom: 8 } },\n    scales: {\n      xAxes: [{\n        stacked: true,\n        ticks: { beginAtZero: true, fontColor: INK },\n        gridLines: { color: GRID, zeroLineColor: GRID, drawBorder: false },\n        scaleLabel: { display: true, labelString: 'Calls', fontColor: INK },\n      }],\n      yAxes: [{\n        stacked: true,\n        ticks: { fontColor: INK_STRONG },\n        gridLines: { display: false, drawBorder: false },\n      }],\n    },\n  },\n};\n\nconst lines = reps.map((rep) => {\n  const silent = rep.asked - rep.answered;\n  const tail = silent > 0 ? `, ${silent} day${silent === 1 ? '' : 's'} silent` : '';\n  return `${rep.name}: ${rep.calls}/${rep.target_total} (${rep.pct_of_target}%) · hit target ${rep.hit_days}/${rep.asked} days${tail}`;\n});\n\nreturn [{\n  json: {\n    week,\n    chart,\n    height: 150 + reps.length * 58,\n    summary: `Sales calls — week ${week}\\n\\n${lines.join('\\n')}`,\n  },\n}];"
+      },
+      "id": "bf4fc388-9312-5679-a30b-42abf440fe87",
+      "name": "Build the chart",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chart: $json.chart, width: 820, height: $json.height, backgroundColor: 'white', devicePixelRatio: 2, format: 'png' }) }}",
+        "options": {}
+      },
+      "id": "55ae0866-2512-59ef-9064-356a5ac5ae6b",
+      "name": "Render the chart",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        640,
+        1500
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "REPLACE_WITH_COACH_WHATSAPP_NUMBER",
+        "messageType": "image",
+        "mediaPath": "useMediaLink",
+        "mediaLink": "={{ $json.url }}",
+        "additionalFields": {
+          "mediaCaption": "={{ $('Build the chart').item.json.summary }}"
+        }
+      },
+      "id": "416e0dcf-484a-51fd-a5ce-eee7afaba6b5",
+      "name": "Send the chart to the coach",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        860,
+        1500
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Weekdays 16:30": {
+      "main": [
+        [
+          {
+            "node": "Get the roster",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get the roster": {
+      "main": [
+        [
+          {
+            "node": "Pick today's reps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick today's reps": {
+      "main": [
+        [
+          {
+            "node": "Ask on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log the ask",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is it a text reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it a text reply?": {
+      "main": [
+        [
+          {
+            "node": "Get the roster (reply)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get the roster (reply)": {
+      "main": [
+        [
+          {
+            "node": "Match rep & parse reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match rep & parse reply": {
+      "main": [
+        [
+          {
+            "node": "Understood the reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Understood the reply?": {
+      "main": [
+        [
+          {
+            "node": "Have a number?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read it with Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read it with Claude": {
+      "main": [
+        [
+          {
+            "node": "Apply the model's answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask for a plain number",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply the model's answer": {
+      "main": [
+        [
+          {
+            "node": "Have a number?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Read it with Claude",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Have a number?": {
+      "main": [
+        [
+          {
+            "node": "Record the answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask for a plain number",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record the answer": {
+      "main": [
+        [
+          {
+            "node": "Confirm it landed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fridays 17:00": {
+      "main": [
+        [
+          {
+            "node": "Read the log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read the log": {
+      "main": [
+        [
+          {
+            "node": "Aggregate the week",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate the week": {
+      "main": [
+        [
+          {
+            "node": "Write weekly totals",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build the chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build the chart": {
+      "main": [
+        [
+          {
+            "node": "Render the chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render the chart": {
+      "main": [
+        [
+          {
+            "node": "Send the chart to the coach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Helsinki",
+    "saveManualExecutions": true
+  },
+  "pinData": {}
+}
