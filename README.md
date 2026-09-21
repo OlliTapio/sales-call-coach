@@ -43,11 +43,19 @@ workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
 
 ## Setup
 
-1. **Import** `workflow.json` into n8n (*Workflows → Import from File*).
-2. **Credentials** — none are bundled. Connect three on the nodes that ask for
-   them: Google Sheets OAuth2, WhatsApp Business Cloud (`whatsAppApi`), WhatsApp
-   Trigger (`whatsAppTriggerApi`), and — only if you want the model branch —
-   Anthropic.
+1. **Import** `workflow.json` into n8n (*Workflows → Import from File*), or from
+   the command line:
+
+   ```
+   n8n import:workflow --input=workflow.json
+   ```
+
+   The file carries a fixed `id`, so a re-import updates the same workflow rather
+   than making a second copy.
+2. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
+   WhatsApp Business Cloud (`whatsAppApi`) and WhatsApp Trigger
+   (`whatsAppTriggerApi`). A fourth, Anthropic, is needed only if you want the
+   model branch.
 3. **Replace three placeholders.** They are spelled exactly this way everywhere:
    - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all six Sheets nodes
    - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all four WhatsApp nodes
@@ -136,6 +144,16 @@ node sync-code.mjs --check   # workflow.json still matches code/
 a node body outside n8n. The structural tests catch the failures that otherwise
 only appear after import: a connection to a renamed node, an expression pointing
 at a node that no longer exists, a credential exported by accident.
+
+Beyond what CI runs, this has been checked against **n8n 2.35.7**: the workflow
+imports cleanly, every parameter name matches the node definitions shipped in
+`n8n-nodes-base` and `@n8n/n8n-nodes-langchain`, and all four Code node bodies
+were executed inside n8n's own runtime — not just the harness — with the same
+assertions passing there.
+
+Not yet exercised end to end: the live WhatsApp and Google Sheets calls, and the
+QuickChart render. Those need credentials — see *Design notes* above for the
+WhatsApp windowing rules that constrain them.
 
 ## What is deliberately not here
 

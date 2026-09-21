@@ -13,6 +13,13 @@ test('code/ and workflow.json have not drifted apart', () => {
   assert.deepEqual(drift(), []);
 });
 
+test('the workflow carries an id, so `n8n import:workflow` works', () => {
+  // The UI generates an id on import; the CLI writes straight to a NOT NULL
+  // column and fails with a SQLITE_CONSTRAINT error without one.
+  assert.equal(typeof wf.id, 'string');
+  assert.ok(wf.id.length > 0 && wf.id.length <= 36);
+});
+
 test('node names and ids are unique', () => {
   assert.equal(names.size, wf.nodes.length);
   assert.equal(new Set(wf.nodes.map((n) => n.id)).size, wf.nodes.length);
