@@ -1,4 +1,4 @@
-// One output item per inbound text message from someone on the founder list.
+// One output item per inbound text message from someone the coach is monitoring.
 //
 // Deterministic parse first, agent second. "6", "6/3" and "none" cover the
 // evening check-in and cost nothing; everything else — a question, an excuse,
@@ -47,12 +47,12 @@ function parse(text, callsTarget) {
   return { calls: null, hours: null, how: 'unparsed' };
 }
 
-// The founder list arrives on this node's input; the messages come from the
+// The people list arrives on this node's input; the messages come from the
 // trigger.
-const founders = new Map();
+const people = new Map();
 for (const item of $input.all()) {
   const phone = String(item.json.phone ?? '').replace(/\D/g, '');
-  if (phone) founders.set(phone, item.json);
+  if (phone) people.set(phone, item.json);
 }
 
 const out = [];
@@ -62,14 +62,14 @@ for (const event of $('WhatsApp Trigger').all()) {
     if (message.type !== 'text') continue;
 
     const phone = String(message.from ?? '').replace(/\D/g, '');
-    const founder = founders.get(phone);
+    const person = people.get(phone);
 
     // Someone not on the list messaged the business number. Not ours to log.
-    if (!founder) continue;
+    if (!person) continue;
 
     const text = String(message.text?.body ?? '').trim();
-    const callsTarget = Number(founder.calls_target) || 0;
-    const hoursCap = Number(founder.hours_cap) || 0;
+    const callsTarget = Number(person.calls_target) || 0;
+    const hoursCap = Number(person.hours_cap) || 0;
 
     const stamp = Number(message.timestamp);
     const receivedAt = Number.isFinite(stamp) && stamp > 0
@@ -88,9 +88,9 @@ for (const event of $('WhatsApp Trigger').all()) {
         key: `${dateKey}|${phone}`,
         date: dateKey,
         weekday: forDay.toFormat('ccc'),
-        name: String(founder.name ?? '').trim() || phone,
+        name: String(person.name ?? '').trim() || phone,
         phone,
-        focus: String(founder.focus ?? '').trim().toLowerCase(),
+        focus: String(person.focus ?? '').trim(),
         calls_target: callsTarget,
         calls: calls === null ? '' : calls,
         hours_cap: hoursCap,

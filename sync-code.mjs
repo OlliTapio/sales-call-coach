@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 export const CODE_NODES = {
   "Set today's goals": 'set-todays-goals.js',
-  'Match founder & parse reply': 'match-founder-and-parse-reply.js',
+  'Match person & parse reply': 'match-person-and-parse-reply.js',
 };
 
 const WORKFLOW = new URL('./workflow.json', import.meta.url);

@@ -1,10 +1,10 @@
 {
-  "id": "smartScaleOsWhatsapp",
-  "name": "Smart Scale OS - WhatsApp coach",
+  "id": "whatsappCoach",
+  "name": "Coach - WhatsApp daily check-in",
   "nodes": [
     {
       "parameters": {
-        "content": "## 1 · Goals\nWeekdays 08:30. Two numbers and one focus, read off the founder row — not written by the model. The date key is minted here; tonight's reply rebuilds it and updates the same row instead of appending a second one.",
+        "content": "## 1 · Goals\nWeekdays 08:30. Two numbers and one focus, read off the person's row — not written by the model. The date key is minted here; tonight's reply rebuilds it and updates the same row instead of appending a second one.",
         "width": 1200,
         "height": 180,
         "color": 4
@@ -48,14 +48,14 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Founders"
+          "value": "People"
         },
         "options": {
           "returnAllMatches": "returnAllMatches"
         }
       },
       "id": "b7e10003-0000-4000-8000-000000000003",
-      "name": "Get the founders",
+      "name": "Get the people",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
@@ -66,7 +66,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Founder rows in, one morning message per active founder out.\n//\n// The day's goals are read off the founder's row, not invented here and not\n// written by the model. Two numbers and one focus is the whole commitment: a\n// founder who has to read a paragraph before breakfast stops reading it by\n// Wednesday.\n//\n// The date key is built here and nowhere else. The reply lane rebuilds the\n// same key, which is how tonight's answer finds this morning's row instead of\n// appending a second one.\nconst ZONE = 'Europe/Helsinki';\n\n// The four things Smart Scale OS scores. The daily lane does not score them —\n// it only reminds the founder which one this month belongs to, so the number\n// they report has a reason attached to it. Scoring is the weekly job (TODO).\nconst FOCUS = {\n  close: {\n    label: 'Close Rate',\n    line: 'Every call you take is one your closer never learns to win alone.',\n  },\n  profit: {\n    label: 'Net Profit',\n    line: 'Every point of discount comes straight off your target. Hold the floor price.',\n  },\n  hours: {\n    label: 'Founder Hours',\n    line: 'Every hour in operational decisions is an hour not spent on thought leadership.',\n  },\n  pipe: {\n    label: 'Pipeline',\n    line: 'Pipeline is a cadence problem. The market forgets you in two quiet weeks.',\n  },\n};\n\nconst today = $now.setZone(ZONE);\nconst dateKey = today.toFormat('yyyy-MM-dd');\n\nconst goals = [];\n\nfor (const item of $input.all()) {\n  const founder = item.json;\n\n  const active = String(founder.active ?? '').trim().toLowerCase();\n  if (!['true', 'yes', '1', 'x'].includes(active)) continue;\n\n  // Sheets hands phone numbers back as text or as a number, with or without a\n  // +. WhatsApp always reports the sender as bare digits, so normalise to that.\n  const phone = String(founder.phone ?? '').replace(/\\D/g, '');\n  if (!phone) continue;\n\n  const name = String(founder.name ?? '').trim() || phone;\n  const first = name.split(/\\s+/)[0];\n\n  const callsTarget = Number(founder.calls_target) || 0;\n  const hoursCap = Number(founder.hours_cap) || 0;\n\n  const focusKey = String(founder.focus ?? '').trim().toLowerCase();\n  const focus = FOCUS[focusKey];\n\n  // A founder with no focus set still gets their numbers. The reminder is the\n  // part that is optional, not the commitment.\n  const reminder = focus ? `\\n\\nFocus: *${focus.label}*. ${focus.line}` : '';\n\n  goals.push({\n    json: {\n      key: `${dateKey}|${phone}`,\n      date: dateKey,\n      weekday: today.toFormat('ccc'),\n      name,\n      phone,\n      focus: focusKey,\n      calls_target: callsTarget,\n      calls: '',\n      hours_cap: hoursCap,\n      hours: '',\n      status: 'goal_set',\n      note: '',\n      raw_reply: '',\n      logged_at: today.toISO(),\n      message:\n        `Morning ${first}. Today: *${callsTarget} sales calls*, and stay under `\n        + `*${hoursCap}h* on them.${reminder}\\n\\nTell me how it went tonight — `\n        + `\"${callsTarget}/${hoursCap}\" is enough, or just talk to me.`,\n    },\n  });\n}\n\nreturn goals;"
+        "jsCode": "// People rows in, one morning message per active person out.\n//\n// The day's goals are read off their row, not invented here and not written by\n// the model. Two numbers and one focus is the whole commitment: someone who has\n// to read a paragraph before breakfast stops reading it by Wednesday.\n//\n// The date key is built here and nowhere else. The reply lane rebuilds the same\n// key, which is how tonight's answer finds this morning's row instead of\n// appending a second one.\nconst ZONE = 'Europe/Helsinki';\n\nconst today = $now.setZone(ZONE);\nconst dateKey = today.toFormat('yyyy-MM-dd');\n\nconst goals = [];\n\nfor (const item of $input.all()) {\n  const person = item.json;\n\n  const active = String(person.active ?? '').trim().toLowerCase();\n  if (!['true', 'yes', '1', 'x'].includes(active)) continue;\n\n  // Sheets hands phone numbers back as text or as a number, with or without a\n  // +. WhatsApp always reports the sender as bare digits, so normalise to that.\n  const phone = String(person.phone ?? '').replace(/\\D/g, '');\n  if (!phone) continue;\n\n  const name = String(person.name ?? '').trim() || phone;\n  const first = name.split(/\\s+/)[0];\n\n  const callsTarget = Number(person.calls_target) || 0;\n  const hoursCap = Number(person.hours_cap) || 0;\n\n  // Free text, straight off the sheet. The coach matches it against the Focus\n  // column in the playbook library, so whoever owns the sheet decides what the\n  // focuses are — nothing here knows or cares what the words mean.\n  const focus = String(person.focus ?? '').trim();\n\n  // Someone with no focus set still gets their numbers. The reminder is the\n  // part that is optional, not the commitment.\n  const reminder = focus ? `\\n\\nFocus: *${focus}*.` : '';\n\n  goals.push({\n    json: {\n      key: `${dateKey}|${phone}`,\n      date: dateKey,\n      weekday: today.toFormat('ccc'),\n      name,\n      phone,\n      focus,\n      calls_target: callsTarget,\n      calls: '',\n      hours_cap: hoursCap,\n      hours: '',\n      status: 'goal_set',\n      note: '',\n      raw_reply: '',\n      logged_at: today.toISO(),\n      message:\n        `Morning ${first}. Today: *${callsTarget} calls*, and stay under `\n        + `*${hoursCap}h* on them.${reminder}\\n\\nTell me how it went tonight — `\n        + `\"${callsTarget}/${hoursCap}\" is enough, or just talk to me.`,\n    },\n  });\n}\n\nreturn goals;"
       },
       "id": "b7e10004-0000-4000-8000-000000000004",
       "name": "Set today's goals",
@@ -223,14 +223,14 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Founders"
+          "value": "People"
         },
         "options": {
           "returnAllMatches": "returnAllMatches"
         }
       },
       "id": "b7e10011-0000-4000-8000-000000000011",
-      "name": "Get the founders (reply)",
+      "name": "Get the people (reply)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
@@ -242,10 +242,10 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// One output item per inbound text message from someone on the founder list.\n//\n// Deterministic parse first, agent second. \"6\", \"6/3\" and \"none\" cover the\n// evening check-in and cost nothing; everything else — a question, an excuse,\n// a paragraph about a deal that went sideways — is handed to the agent. Putting\n// the cheap path first is what keeps the log trustworthy: the number that ends\n// up in the spreadsheet on a normal evening was read by a regex, not chosen by\n// a model.\nconst ZONE = 'Europe/Helsinki';\n\n// A reply typed at 00:30 is about the day that just ended, not the new one.\nconst DAY_ROLLOVER_HOUR = 4;\n\nconst ALL_WORDS = ['all', 'all of them', 'yes', 'yep', 'yup', 'done', 'all done', 'kaikki', 'joo', 'kyllä'];\nconst NONE_WORDS = ['none', 'no', 'nope', 'zero', '0', 'ei', 'en yhtään'];\n\n// Nobody works more than this in a day, so a bigger number is a typo or a\n// different unit and belongs to the agent to sort out.\nconst MAX_HOURS = 18;\nconst MAX_CALLS = 100;\n\n// A bare count, or a count and the hours it took: \"6\", \"6/3\", \"6 / 3\", \"6-3\".\n// Only trusted when the message is essentially just that, so \"tomorrow I'll do\n// 8\" is never logged as eight calls today.\nfunction parse(text, callsTarget) {\n  const clean = text.trim().toLowerCase();\n\n  if (ALL_WORDS.includes(clean)) return { calls: callsTarget, hours: null, how: 'all' };\n  if (NONE_WORDS.includes(clean)) return { calls: 0, hours: null, how: 'none' };\n\n  if (clean.length > 12) return { calls: null, hours: null, how: 'unparsed' };\n\n  const pair = clean.match(/^(\\d{1,3})\\s*[/\\-,]\\s*(\\d{1,2}(?:[.,]\\d)?)\\s*h?$/);\n  if (pair) {\n    const calls = Number(pair[1]);\n    const hours = Number(pair[2].replace(',', '.'));\n    if (calls <= MAX_CALLS && hours <= MAX_HOURS) return { calls, hours, how: 'calls+hours' };\n    return { calls: null, hours: null, how: 'unparsed' };\n  }\n\n  const single = clean.match(/(?<!\\d)(\\d{1,3})(?!\\d)/);\n  if (single) {\n    const calls = Number(single[1]);\n    if (calls <= MAX_CALLS) return { calls, hours: null, how: 'calls' };\n  }\n\n  return { calls: null, hours: null, how: 'unparsed' };\n}\n\n// The founder list arrives on this node's input; the messages come from the\n// trigger.\nconst founders = new Map();\nfor (const item of $input.all()) {\n  const phone = String(item.json.phone ?? '').replace(/\\D/g, '');\n  if (phone) founders.set(phone, item.json);\n}\n\nconst out = [];\n\nfor (const event of $('WhatsApp Trigger').all()) {\n  for (const message of event.json.messages ?? []) {\n    if (message.type !== 'text') continue;\n\n    const phone = String(message.from ?? '').replace(/\\D/g, '');\n    const founder = founders.get(phone);\n\n    // Someone not on the list messaged the business number. Not ours to log.\n    if (!founder) continue;\n\n    const text = String(message.text?.body ?? '').trim();\n    const callsTarget = Number(founder.calls_target) || 0;\n    const hoursCap = Number(founder.hours_cap) || 0;\n\n    const stamp = Number(message.timestamp);\n    const receivedAt = Number.isFinite(stamp) && stamp > 0\n      ? DateTime.fromSeconds(stamp).setZone(ZONE)\n      : $now.setZone(ZONE);\n\n    const forDay = receivedAt.hour < DAY_ROLLOVER_HOUR\n      ? receivedAt.minus({ days: 1 })\n      : receivedAt;\n\n    const dateKey = forDay.toFormat('yyyy-MM-dd');\n    const { calls, hours, how } = parse(text, callsTarget);\n\n    out.push({\n      json: {\n        key: `${dateKey}|${phone}`,\n        date: dateKey,\n        weekday: forDay.toFormat('ccc'),\n        name: String(founder.name ?? '').trim() || phone,\n        phone,\n        focus: String(founder.focus ?? '').trim().toLowerCase(),\n        calls_target: callsTarget,\n        calls: calls === null ? '' : calls,\n        hours_cap: hoursCap,\n        hours: hours === null ? '' : hours,\n        status: calls === null ? 'unparsed' : 'logged',\n        note: how,\n        raw_reply: text,\n        logged_at: receivedAt.toISO(),\n        // Routing only. True means the regex read a number and the agent is\n        // not needed; false hands the whole message over.\n        parsed: calls !== null,\n        message_id: message.id ?? '',\n      },\n    });\n  }\n}\n\nreturn out;"
+        "jsCode": "// One output item per inbound text message from someone the coach is monitoring.\n//\n// Deterministic parse first, agent second. \"6\", \"6/3\" and \"none\" cover the\n// evening check-in and cost nothing; everything else — a question, an excuse,\n// a paragraph about a deal that went sideways — is handed to the agent. Putting\n// the cheap path first is what keeps the log trustworthy: the number that ends\n// up in the spreadsheet on a normal evening was read by a regex, not chosen by\n// a model.\nconst ZONE = 'Europe/Helsinki';\n\n// A reply typed at 00:30 is about the day that just ended, not the new one.\nconst DAY_ROLLOVER_HOUR = 4;\n\nconst ALL_WORDS = ['all', 'all of them', 'yes', 'yep', 'yup', 'done', 'all done', 'kaikki', 'joo', 'kyllä'];\nconst NONE_WORDS = ['none', 'no', 'nope', 'zero', '0', 'ei', 'en yhtään'];\n\n// Nobody works more than this in a day, so a bigger number is a typo or a\n// different unit and belongs to the agent to sort out.\nconst MAX_HOURS = 18;\nconst MAX_CALLS = 100;\n\n// A bare count, or a count and the hours it took: \"6\", \"6/3\", \"6 / 3\", \"6-3\".\n// Only trusted when the message is essentially just that, so \"tomorrow I'll do\n// 8\" is never logged as eight calls today.\nfunction parse(text, callsTarget) {\n  const clean = text.trim().toLowerCase();\n\n  if (ALL_WORDS.includes(clean)) return { calls: callsTarget, hours: null, how: 'all' };\n  if (NONE_WORDS.includes(clean)) return { calls: 0, hours: null, how: 'none' };\n\n  if (clean.length > 12) return { calls: null, hours: null, how: 'unparsed' };\n\n  const pair = clean.match(/^(\\d{1,3})\\s*[/\\-,]\\s*(\\d{1,2}(?:[.,]\\d)?)\\s*h?$/);\n  if (pair) {\n    const calls = Number(pair[1]);\n    const hours = Number(pair[2].replace(',', '.'));\n    if (calls <= MAX_CALLS && hours <= MAX_HOURS) return { calls, hours, how: 'calls+hours' };\n    return { calls: null, hours: null, how: 'unparsed' };\n  }\n\n  const single = clean.match(/(?<!\\d)(\\d{1,3})(?!\\d)/);\n  if (single) {\n    const calls = Number(single[1]);\n    if (calls <= MAX_CALLS) return { calls, hours: null, how: 'calls' };\n  }\n\n  return { calls: null, hours: null, how: 'unparsed' };\n}\n\n// The people list arrives on this node's input; the messages come from the\n// trigger.\nconst people = new Map();\nfor (const item of $input.all()) {\n  const phone = String(item.json.phone ?? '').replace(/\\D/g, '');\n  if (phone) people.set(phone, item.json);\n}\n\nconst out = [];\n\nfor (const event of $('WhatsApp Trigger').all()) {\n  for (const message of event.json.messages ?? []) {\n    if (message.type !== 'text') continue;\n\n    const phone = String(message.from ?? '').replace(/\\D/g, '');\n    const person = people.get(phone);\n\n    // Someone not on the list messaged the business number. Not ours to log.\n    if (!person) continue;\n\n    const text = String(message.text?.body ?? '').trim();\n    const callsTarget = Number(person.calls_target) || 0;\n    const hoursCap = Number(person.hours_cap) || 0;\n\n    const stamp = Number(message.timestamp);\n    const receivedAt = Number.isFinite(stamp) && stamp > 0\n      ? DateTime.fromSeconds(stamp).setZone(ZONE)\n      : $now.setZone(ZONE);\n\n    const forDay = receivedAt.hour < DAY_ROLLOVER_HOUR\n      ? receivedAt.minus({ days: 1 })\n      : receivedAt;\n\n    const dateKey = forDay.toFormat('yyyy-MM-dd');\n    const { calls, hours, how } = parse(text, callsTarget);\n\n    out.push({\n      json: {\n        key: `${dateKey}|${phone}`,\n        date: dateKey,\n        weekday: forDay.toFormat('ccc'),\n        name: String(person.name ?? '').trim() || phone,\n        phone,\n        focus: String(person.focus ?? '').trim(),\n        calls_target: callsTarget,\n        calls: calls === null ? '' : calls,\n        hours_cap: hoursCap,\n        hours: hours === null ? '' : hours,\n        status: calls === null ? 'unparsed' : 'logged',\n        note: how,\n        raw_reply: text,\n        logged_at: receivedAt.toISO(),\n        // Routing only. True means the regex read a number and the agent is\n        // not needed; false hands the whole message over.\n        parsed: calls !== null,\n        message_id: message.id ?? '',\n      },\n    });\n  }\n}\n\nreturn out;"
       },
       "id": "b7e10012-0000-4000-8000-000000000012",
-      "name": "Match founder & parse reply",
+      "name": "Match person & parse reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -358,7 +358,7 @@
     },
     {
       "parameters": {
-        "content": "## 3 · Coach\nOne agent, two tools. It logs what the founder actually said and coaches from the Notion playbook library — and from nothing else. It cannot set a goal, move a target or quote a price that is not in a playbook row. If Anthropic is down the founder is asked for a plain number instead, which lane 2 can still log.",
+        "content": "## 3 · Coach\nOne agent for everyone on the list. It logs what the person actually said and coaches from the Notion playbook library — and from nothing else. It cannot set a goal, move a target or quote a number that is not in a playbook row. If Anthropic is down the person is asked for a plain number instead, which lane 2 can still log.",
         "width": 1200,
         "height": 200,
         "color": 6
@@ -375,17 +375,17 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Founder: {{ $json.name }} ({{ $json.phone }})\nToday is {{ $json.weekday }} {{ $json.date }}. Today's goals: {{ $json.calls_target }} sales calls, under {{ $json.hours_cap }}h on them.\nTheir current focus metric: {{ $json.focus }}\nLog row key: {{ $json.key }}\n\nThey said: {{ $json.raw_reply }}",
+        "text": "=Person: {{ $json.name }} ({{ $json.phone }})\nToday is {{ $json.weekday }} {{ $json.date }}. Today's goals: {{ $json.calls_target }} calls, under {{ $json.hours_cap }}h on them.\nTheir current focus: {{ $json.focus }}\nLog row key: {{ $json.key }}\n\nThey said: {{ $json.raw_reply }}",
         "hasOutputParser": false,
         "needsFallback": false,
         "options": {
-          "systemMessage": "You are the Smart Scale OS coach, messaging a founder on WhatsApp. You have two jobs.\n\n1. Log the day. If the message says how many sales calls they held or how many hours they spent, call log_the_day with exactly those numbers. Never guess one they did not give — leave it out. Say what you logged.\n\n2. Coach. Use read_the_playbooks to find recovery tasks for their focus metric, and name at most one, with the playbook it comes from. Coach on behaviour, cadence and what to stop doing.\n\nHard limits. Never state a price, a policy, a target or a number that is not in the prompt or in a playbook row you just read. If they ask for one you do not have, say you do not have it and tell them to raise it with their mentor. Never set or change a goal — only their mentor does that.\n\nDoctrine: one focus at a time; removing the founder from the work beats adding effort; cadence beats intensity.\n\nReply in at most 60 words. No emoji, no greeting, no sign-off, no links, no bullet lists — plain sentences someone reads on a phone.",
+          "systemMessage": "You are a coach, messaging one of the people you work with on WhatsApp. You have two jobs.\n\n1. Log the day. If the message says how many calls they held or how many hours they spent, call log_the_day with exactly those numbers. Never guess one they did not give — leave it out. Say what you logged.\n\n2. Coach. Use read_the_playbooks to find tasks whose Focus matches theirs, and name at most one, with the playbook it comes from. Coach on behaviour, cadence and what to stop doing.\n\nHard limits. Never state a price, a policy, a target or a number that is not in the prompt or in a playbook row you just read. If they ask for one you do not have, say you do not have it and tell them to raise it with whoever set their goals. Never set or change a goal yourself.\n\nYou coach several people. Nothing one person tells you may appear in a reply to anyone else.\n\nReply in at most 60 words. No emoji, no greeting, no sign-off, no links, no bullet lists — plain sentences someone reads on a phone.",
           "maxIterations": 6,
           "enableStreaming": false
         }
       },
       "id": "b7e10018-0000-4000-8000-000000000018",
-      "name": "Smart Scale coach",
+      "name": "Coach",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
@@ -438,7 +438,7 @@
     {
       "parameters": {
         "descriptionType": "manual",
-        "toolDescription": "Write the founder's numbers for today into the log. Call this only when the message actually states how many sales calls they held, or how many hours they spent on them.",
+        "toolDescription": "Write this person's numbers for today into the log. Call this only when the message actually states how many calls they held, or how many hours they spent on them.",
         "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
@@ -460,9 +460,9 @@
             "phone": "={{ $json.phone }}",
             "focus": "={{ $json.focus }}",
             "calls_target": "={{ $json.calls_target }}",
-            "calls": "={{ $fromAI('calls', 'How many sales calls the founder says they held today. Omit if they did not say.', 'number') }}",
+            "calls": "={{ $fromAI('calls', 'How many calls the person says they held today. Omit if they did not say.', 'number') }}",
             "hours_cap": "={{ $json.hours_cap }}",
-            "hours": "={{ $fromAI('hours', 'How many hours the founder says they spent on sales calls today. Omit if they did not say.', 'number') }}",
+            "hours": "={{ $fromAI('hours', 'How many hours the person says they spent on calls today. Omit if they did not say.', 'number') }}",
             "status": "=logged",
             "note": "={{ $fromAI('note', 'Why, in at most six words, for example \"two no-shows\" or \"delivery fire\". Empty if they gave no reason.', 'string') }}",
             "raw_reply": "={{ $json.raw_reply }}",
@@ -491,7 +491,7 @@
     {
       "parameters": {
         "descriptionType": "manual",
-        "toolDescription": "Read the Smart Scale OS playbook library: every recovery task, which metric and pillar it belongs to, its priority, the playbook it comes from and how long it takes. Takes no arguments.",
+        "toolDescription": "Read the playbook library: every task, the Focus it belongs to, its pillar, its priority, the playbook it comes from and how long it takes. Takes no arguments.",
         "resource": "databasePage",
         "operation": "getAll",
         "dataSourceId": {
@@ -523,7 +523,7 @@
             {
               "id": "b7e10023-0000-4000-8000-000000000023",
               "name": "message",
-              "value": "={{ ($json.output || '').trim().replace(/^[\"']|[\"']$/g, '').slice(0, 900) || \"I couldn't read a number out of that. How many sales calls did you hold today? Just the number is fine.\" }}",
+              "value": "={{ ($json.output || '').trim().replace(/^[\"']|[\"']$/g, '').slice(0, 900) || \"I couldn't read a number out of that. How many calls did you hold today? Just the number is fine.\" }}",
               "type": "string"
             }
           ]
@@ -545,7 +545,7 @@
         "resource": "message",
         "operation": "send",
         "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Match founder & parse reply').item.json.phone }}",
+        "recipientPhoneNumber": "={{ $('Match person & parse reply').item.json.phone }}",
         "messageType": "text",
         "textBody": "={{ $json.message }}"
       },
@@ -560,12 +560,28 @@
     },
     {
       "parameters": {
-        "content": "## TODO\nNot built, deliberately — this canvas is the daily loop only.\n\n- **Weekly scoring.** The four Smart Scale metrics (Close Rate, Net Profit, Founder Hours, Pipeline) against derived targets, in a Code node so the scoring stays deterministic.\n- **One-focus doctrine.** When several metrics fail, name one and queue the rest — the rule the mock enforces on the dashboard.\n- **Friday scorecard.** The metric cards as a chart, to the founder and their mentor.\n- **Chase the quiet.** A nudge for founders who never replied, respecting the WhatsApp 24-hour window.\n- **Evals.** Retrieval and groundedness on the coach reply, before any of the above.",
+        "content": "## Known defects\n**The coach forgets everyone within the hour.** `Remember the thread` is n8n's Simple Memory: a Map held in the n8n process, swept on every read, dropping any thread not touched for 60 minutes. A daily check-in is the worst case for it — someone answers the 08:30 message at 17:00 and the coach has no memory of the morning. It is also process-local, so a restart clears it and queue-mode workers each keep their own copy of a different half of the conversation.\n\n`contextWindowLength: 6` bounds **turns, not tokens**, so one pasted wall of text still goes to the model whole.\n\n**Fix:** a persistent chat memory (Postgres or Redis), or drop the memory node and read the last few `Days` rows into the prompt — the sheet already holds the history, deterministically and for free.",
         "width": 460,
-        "height": 620,
+        "height": 460,
         "color": 3
       },
       "id": "b7e10026-0000-4000-8000-000000000026",
+      "name": "Known defects note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## TODO\nNot built, deliberately — this canvas is the daily loop only.\n\n- **Weekly scoring.** Each focus against its target, in a Code node so the scoring stays deterministic.\n- **One focus at a time.** When several things are off target, name one and queue the rest.\n- **Friday scorecard.** The week as a chart, to the person and to whoever coaches them.\n- **Chase the quiet.** A nudge for anyone who never replied, respecting the WhatsApp 24-hour window.\n- **Evals.** Groundedness and logging accuracy on the coach reply, before any of the above.",
+        "width": 460,
+        "height": 620,
+        "color": 7
+      },
+      "id": "b7e10027-0000-4000-8000-000000000027",
       "name": "TODO note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -580,14 +596,14 @@
       "main": [
         [
           {
-            "node": "Get the founders",
+            "node": "Get the people",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get the founders": {
+    "Get the people": {
       "main": [
         [
           {
@@ -635,25 +651,25 @@
       "main": [
         [
           {
-            "node": "Get the founders (reply)",
+            "node": "Get the people (reply)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get the founders (reply)": {
+    "Get the people (reply)": {
       "main": [
         [
           {
-            "node": "Match founder & parse reply",
+            "node": "Match person & parse reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Match founder & parse reply": {
+    "Match person & parse reply": {
       "main": [
         [
           {
@@ -675,7 +691,7 @@
         ],
         [
           {
-            "node": "Smart Scale coach",
+            "node": "Coach",
             "type": "main",
             "index": 0
           }
@@ -693,7 +709,7 @@
         ]
       ]
     },
-    "Smart Scale coach": {
+    "Coach": {
       "main": [
         [
           {
@@ -726,7 +742,7 @@
       "ai_languageModel": [
         [
           {
-            "node": "Smart Scale coach",
+            "node": "Coach",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -737,7 +753,7 @@
       "ai_memory": [
         [
           {
-            "node": "Smart Scale coach",
+            "node": "Coach",
             "type": "ai_memory",
             "index": 0
           }
@@ -748,7 +764,7 @@
       "ai_tool": [
         [
           {
-            "node": "Smart Scale coach",
+            "node": "Coach",
             "type": "ai_tool",
             "index": 0
           }
@@ -759,7 +775,7 @@
       "ai_tool": [
         [
           {
-            "node": "Smart Scale coach",
+            "node": "Coach",
             "type": "ai_tool",
             "index": 0
           }

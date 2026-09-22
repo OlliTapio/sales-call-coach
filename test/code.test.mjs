@@ -7,20 +7,20 @@ const ZONE = 'Europe/Helsinki';
 // ---------------------------------------------------------------------------
 // Set today's goals
 // ---------------------------------------------------------------------------
-const FOUNDERS = [
-  { name: 'Anna Virtanen', phone: '+358 40 123 4567', calls_target: 8, hours_cap: 2, focus: 'close', active: 'TRUE' },
-  { name: 'Mikko Laine', phone: '358401234568', calls_target: 5, hours_cap: 3, focus: 'HOURS', active: 'true' },
-  { name: 'Paused Person', phone: '358401234569', calls_target: 8, hours_cap: 2, focus: 'close', active: 'FALSE' },
-  { name: 'No Phone', phone: '', calls_target: 8, hours_cap: 2, focus: 'close', active: 'TRUE' },
+const PEOPLE = [
+  { name: 'Anna Virtanen', phone: '+358 40 123 4567', calls_target: 8, hours_cap: 2, focus: 'close rate', active: 'TRUE' },
+  { name: 'Mikko Laine', phone: '358401234568', calls_target: 5, hours_cap: 3, focus: 'founder hours', active: 'true' },
+  { name: 'Paused Person', phone: '358401234569', calls_target: 8, hours_cap: 2, focus: 'close rate', active: 'FALSE' },
+  { name: 'No Phone', phone: '', calls_target: 8, hours_cap: 2, focus: 'close rate', active: 'TRUE' },
   { name: 'No Focus', phone: '358401234570', calls_target: 10, hours_cap: 1, focus: '', active: 'yes' },
 ];
 
 const goals = runCode('set-todays-goals.js', {
-  items: FOUNDERS,
+  items: PEOPLE,
   now: DateTime.fromISO('2026-09-21T08:30:00', { zone: ZONE }),
 }).map((item) => item.json);
 
-test('goals: only active founders who have a phone number', () => {
+test('goals: only active people who have a phone number', () => {
   assert.deepEqual(goals.map((g) => g.name), ['Anna Virtanen', 'Mikko Laine', 'No Focus']);
 });
 
@@ -33,20 +33,21 @@ test('goals: the key is date|phone, and the reply lane rebuilds it', () => {
 });
 
 test('goals: both numbers reach the message', () => {
-  assert.match(goals[0].message, /8 sales calls/);
+  assert.match(goals[0].message, /8 calls/);
   assert.match(goals[0].message, /2h/);
 });
 
-test('goals: the focus reminder is doctrine, looked up by key not written freely', () => {
-  assert.match(goals[0].message, /Focus: \*Close Rate\*/);
-  // The sheet may hold it in any case.
-  assert.match(goals[1].message, /Focus: \*Founder Hours\*/);
-  assert.equal(goals[1].focus, 'hours');
+test('goals: the focus is whatever the sheet says, not a value this code knows', () => {
+  // Nothing here interprets the word — the coach matches it against the Focus
+  // column in the playbook library, so the sheet's owner defines the set.
+  assert.match(goals[0].message, /Focus: \*close rate\*/);
+  assert.match(goals[1].message, /Focus: \*founder hours\*/);
+  assert.equal(goals[1].focus, 'founder hours');
 });
 
-test('goals: a founder with no focus set still gets their numbers', () => {
+test('goals: someone with no focus set still gets their numbers', () => {
   assert.doesNotMatch(goals[2].message, /Focus:/);
-  assert.match(goals[2].message, /10 sales calls/);
+  assert.match(goals[2].message, /10 calls/);
 });
 
 test('goals: the row is opened with empty cells, not zeroes', () => {
@@ -56,11 +57,11 @@ test('goals: the row is opened with empty cells, not zeroes', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Match founder & parse reply
+// Match person & parse reply
 // ---------------------------------------------------------------------------
-const REPLY_FOUNDERS = [
-  { name: 'Anna Virtanen', phone: '+358401234567', calls_target: 8, hours_cap: 2, focus: 'close', active: 'TRUE' },
-  { name: 'Mikko Laine', phone: '358401234568', calls_target: 5, hours_cap: 3, focus: 'hours', active: 'TRUE' },
+const REPLY_PEOPLE = [
+  { name: 'Anna Virtanen', phone: '+358401234567', calls_target: 8, hours_cap: 2, focus: 'close rate', active: 'TRUE' },
+  { name: 'Mikko Laine', phone: '358401234568', calls_target: 5, hours_cap: 3, focus: 'founder hours', active: 'TRUE' },
 ];
 
 function inbound(body, { at = '2026-09-21T19:02:00', type = 'text', from = '358401234567' } = {}) {
@@ -77,8 +78,8 @@ function inbound(body, { at = '2026-09-21T19:02:00', type = 'text', from = '3584
 }
 
 function reply(body, opts) {
-  const out = runCode('match-founder-and-parse-reply.js', {
-    items: REPLY_FOUNDERS,
+  const out = runCode('match-person-and-parse-reply.js', {
+    items: REPLY_PEOPLE,
     nodes: { 'WhatsApp Trigger': [inbound(body, opts)] },
     now: DateTime.fromISO('2026-09-21T19:02:00', { zone: ZONE }),
   });
@@ -113,7 +114,7 @@ test('parse: "all" means the target, "none" means zero — not the same as silen
   assert.equal(one('none').parsed, true);
 });
 
-test('parse: the target comes from the founder who sent it', () => {
+test('parse: the target comes from the person who sent it', () => {
   assert.equal(one('all', { from: '358401234568' }).calls, 5);
 });
 
@@ -135,7 +136,7 @@ test('parse: the raw message is kept whether or not it parsed', () => {
   assert.equal(one('6').raw_reply, '6');
 });
 
-test('parse: a message from someone not on the founder list is ignored', () => {
+test('parse: a message from someone not being monitored is ignored', () => {
   assert.deepEqual(reply('6', { from: '358409999999' }), []);
 });
 
@@ -156,5 +157,5 @@ test('parse: the goals and the focus travel with the reply, for the coach prompt
   const r = one('rough day');
   assert.equal(r.calls_target, 8);
   assert.equal(r.hours_cap, 2);
-  assert.equal(r.focus, 'close');
+  assert.equal(r.focus, 'close rate');
 });

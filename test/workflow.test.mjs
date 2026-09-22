@@ -85,7 +85,7 @@ test('expressions have balanced braces', () => {
 test('the regex owns the log; the agent only sees what it could not read', () => {
   const [read, unread] = wf.connections['Did the regex read it?'].main;
   assert.deepEqual(read.map((t) => t.node), ['Record the day']);
-  assert.deepEqual(unread.map((t) => t.node), ['Smart Scale coach']);
+  assert.deepEqual(unread.map((t) => t.node), ['Coach']);
 });
 
 test('a plain number never reaches a model', () => {
@@ -108,7 +108,7 @@ test('every write to the Days tab upserts on the same key', () => {
 
 test('the agent may fill in numbers but not the row it writes them to', () => {
   // key, date, phone and the targets are expressions off the item; only the
-  // three cells the founder actually spoke about come from the model.
+  // three cells the person actually spoke about come from the model.
   const columns = byName.log_the_day.parameters.columns.value;
   const fromModel = Object.entries(columns)
     .filter(([, v]) => String(v).includes('$fromAI'))
@@ -125,7 +125,7 @@ test('the agent may fill in numbers but not the row it writes them to', () => {
 test('the agent has exactly one model, one memory and two tools', () => {
   const attached = (kind) => Object.entries(wf.connections)
     .filter(([, kinds]) => kind in kinds)
-    .filter(([, kinds]) => kinds[kind].flat().some((t) => t.node === 'Smart Scale coach'))
+    .filter(([, kinds]) => kinds[kind].flat().some((t) => t.node === 'Coach'))
     .map(([src]) => src)
     .sort();
 
@@ -135,27 +135,27 @@ test('the agent has exactly one model, one memory and two tools', () => {
 });
 
 test('the tool node names are the names the system prompt calls', () => {
-  const prompt = byName['Smart Scale coach'].parameters.options.systemMessage;
+  const prompt = byName.Coach.parameters.options.systemMessage;
   for (const tool of ['log_the_day', 'read_the_playbooks']) {
     assert.ok(names.has(tool), `no node named ${tool}`);
     assert.match(prompt, new RegExp(tool), `the system prompt never mentions ${tool}`);
   }
 });
 
-test('each founder gets their own memory, not a shared one', () => {
+test('each person gets their own memory, not a shared one', () => {
   const memory = byName['Remember the thread'];
   assert.equal(memory.parameters.sessionIdType, 'customKey');
   assert.match(memory.parameters.sessionKey, /\$json\.phone/);
 });
 
 test('streaming is off, because nothing here is a chat trigger', () => {
-  assert.equal(byName['Smart Scale coach'].parameters.options.enableStreaming, false);
+  assert.equal(byName.Coach.parameters.options.enableStreaming, false);
 });
 
 test('the agent degrades instead of dropping the reply', () => {
-  const agent = byName['Smart Scale coach'];
+  const agent = byName.Coach;
   assert.equal(agent.onError, 'continueErrorOutput');
-  const [ok, err] = wf.connections['Smart Scale coach'].main;
+  const [ok, err] = wf.connections.Coach.main;
   assert.deepEqual(ok.map((t) => t.node), ['Tidy the coach reply']);
   assert.deepEqual(err.map((t) => t.node), ['Tidy the coach reply'],
     'the error output must reach a sendable path');
@@ -165,7 +165,7 @@ test('the fallback asks for the one thing the regex can still read', () => {
   const set = byName['Tidy the coach reply'];
   const [assignment] = set.parameters.assignments.assignments;
   assert.match(assignment.value, /\$json\.output/);
-  assert.match(assignment.value, /how many sales calls/i);
+  assert.match(assignment.value, /how many calls/i);
 });
 
 test('the playbooks are read whole, and a Notion outage does not stop the coach', () => {
@@ -184,14 +184,28 @@ test('the playbooks are read whole, and a Notion outage does not stop the coach'
 // Housekeeping
 // ---------------------------------------------------------------------------
 
-test('the founder list is read once per reply, not once per message', () => {
-  assert.equal(byName['Get the founders (reply)'].executeOnce, true);
+test('the people list is read once per reply, not once per message', () => {
+  assert.equal(byName['Get the people (reply)'].executeOnce, true);
 });
 
 test('status-only webhooks do not wake the reply workflow', () => {
   const trigger = byName['WhatsApp Trigger'];
   assert.deepEqual(trigger.parameters.updates, ['messages']);
   assert.deepEqual(trigger.parameters.options.messageStatusUpdates, []);
+});
+
+test('the memory defect stays written down where someone importing this will see it', () => {
+  // A known defect that is only in a commit message is a defect nobody knows
+  // about. It has to survive on the canvas and in the README.
+  const note = wf.nodes.find((n) =>
+    n.type === 'n8n-nodes-base.stickyNote' && /## Known defects/.test(n.parameters.content));
+  assert.ok(note, 'no Known defects sticky on the canvas');
+  assert.match(note.parameters.content, /Remember the thread/);
+  assert.match(note.parameters.content, /60 minutes/);
+
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /## Known defects/);
+  assert.match(readme, /Simple Memory/);
 });
 
 test('no credentials are exported', () => {
@@ -213,7 +227,7 @@ test('the shape the README describes is the shape on the canvas', () => {
 
   const stickies = count('n8n-nodes-base.stickyNote');
   assert.equal(wf.nodes.length - stickies, 19, 'README says nineteen nodes');
-  assert.equal(stickies, 4, 'README says four sticky notes');
+  assert.equal(stickies, 5, 'README says five sticky notes');
 
   assert.match(readme, /on all five Sheets nodes/);
   assert.equal(count('n8n-nodes-base.googleSheets') + count('n8n-nodes-base.googleSheetsTool'), 5);
