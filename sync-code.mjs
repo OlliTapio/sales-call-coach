@@ -1,14 +1,16 @@
-// code/*.js is the source of truth for the four Code nodes; workflow.json is
+// code/*.js is the source of truth for the Code nodes; workflow.json is
 // what n8n imports. This splices one into the other so they cannot drift.
 //
 //   node sync-code.mjs          write code/*.js into workflow.json
 //   node sync-code.mjs --check  fail if they differ (this is what the test does)
 import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 export const CODE_NODES = {
   "Pick today's reps": 'pick-todays-reps.js',
   'Who still owes a number': 'who-still-owes-a-number.js',
   'Match rep & parse reply': 'match-rep-and-parse-reply.js',
+  'Find the best answer': 'find-the-best-answer.js',
   'Aggregate the week': 'aggregate-the-week.js',
   'Build the chart': 'build-the-chart.js',
 };
@@ -35,7 +37,9 @@ export function drift() {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL, not a template string: on Windows argv[1] is a drive path and
+// the naive `file://C:\...` never matches, so the CLI silently did nothing.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const check = process.argv.includes('--check');
   if (check) {
     const problems = drift();

@@ -12,6 +12,14 @@ const DAY_ROLLOVER_HOUR = 4;
 const ALL_WORDS = ['all', 'all of them', 'yes', 'yep', 'yup', 'done', 'all done', 'kaikki', 'joo', 'kyllä'];
 const NONE_WORDS = ['none', 'no', 'nope', 'zero', '0', 'ei', 'en yhtään'];
 
+// Openers that make a sentence a question even without a question mark.
+const QUESTION_WORDS = [
+  'what', 'whats', 'how', 'why', 'when', 'where', 'which', 'who', 'can', 'could', 'do',
+  'does', 'is', 'are', 'should', 'any', 'anyone', 'tell', 'help',
+  'mitä', 'mikä', 'miten', 'kuinka', 'miksi', 'milloin', 'missä', 'kuka', 'onko', 'voiko',
+  'voinko', 'saako', 'kerro', 'apua',
+];
+
 function parse(text, target) {
   const clean = text.trim().toLowerCase();
 
@@ -30,6 +38,22 @@ function parse(text, target) {
   }
 
   return { calls: null, how: 'unparsed' };
+}
+
+// Reps ask things as well as report numbers. This only decides where the
+// message goes, not what the answer is — and it is checked after the number
+// has been looked for, so "did 6, why is the CRM down?" is still logged as six.
+function looksLikeQuestion(text) {
+  const clean = text.trim().toLowerCase();
+  const words = clean.split(/\s+/).filter(Boolean);
+
+  // "?" or "6?" on its own is someone querying their own number, not asking
+  // the handbook anything it could match.
+  if (words.length < 2) return false;
+
+  if (clean.includes('?')) return true;
+
+  return QUESTION_WORDS.includes(words[0].replace(/[^\p{L}]/gu, ''));
 }
 
 // The roster arrives on this node's input; the messages come from the trigger.
@@ -80,6 +104,7 @@ for (const event of $('WhatsApp Trigger').all()) {
         raw_reply: text,
         logged_at: receivedAt.toISO(),
         parsed: calls !== null,
+        looks_like_question: looksLikeQuestion(text),
         message_id: message.id ?? '',
       },
     });

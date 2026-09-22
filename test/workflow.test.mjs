@@ -98,16 +98,61 @@ test('the closed-window branch of the nudge uses a template, not free text', () 
   assert.equal(tmpl.parameters.operation, 'sendTemplate');
 });
 
-test('one model node backs both AI steps', () => {
+test('one model node backs all three AI steps', () => {
   const targets = wf.connections['Claude'].ai_languageModel.flat().map((c) => c.node);
-  assert.deepEqual(targets.sort(), ['Read it with Claude', 'Write the nudge']);
+  assert.deepEqual(targets.sort(), [
+    'Answer from the handbook', 'Read it with Claude', 'Write the nudge',
+  ]);
 });
 
 test('the model branch degrades instead of dropping the answer', () => {
   const extractor = wf.nodes.find((n) => n.name === 'Read it with Claude');
   assert.equal(extractor.onError, 'continueErrorOutput');
   const [, errorBranch] = wf.connections['Read it with Claude'].main;
-  assert.deepEqual(errorBranch.map((t) => t.node), ['Ask for a plain number']);
+  // Still answerable from the handbook even when the extractor is down.
+  assert.deepEqual(errorBranch.map((t) => t.node), ['Is it a question?']);
+});
+
+test('the handbook is only consulted once the number lane has given up', () => {
+  const [number, rest] = wf.connections['Have a number?'].main;
+  assert.deepEqual(number.map((t) => t.node), ['Record the answer']);
+  assert.deepEqual(rest.map((t) => t.node), ['Is it a question?']);
+
+  const [question, neither] = wf.connections['Is it a question?'].main;
+  assert.deepEqual(question.map((t) => t.node), ['Read the handbook']);
+  assert.deepEqual(neither.map((t) => t.node), ['Ask for a plain number']);
+});
+
+test('the handbook is read whole, once per delivery', () => {
+  const notion = wf.nodes.find((n) => n.name === 'Read the handbook');
+  assert.equal(notion.parameters.resource, 'databasePage');
+  assert.equal(notion.parameters.operation, 'getAll');
+  assert.equal(notion.parameters.returnAll, true);
+  // Notion's search matches titles only, so the scoring happens in code here.
+  assert.equal(notion.parameters.filterType, 'none');
+  assert.equal(notion.executeOnce, true);
+});
+
+test('a Notion failure still reaches the matcher, so the rep gets a reply', () => {
+  const notion = wf.nodes.find((n) => n.name === 'Read the handbook');
+  assert.equal(notion.onError, 'continueRegularOutput');
+  // An empty handbook returns no rows at all, which would end the lane here
+  // and leave the question unanswered rather than answered badly.
+  assert.equal(notion.alwaysOutputData, true);
+  assert.deepEqual(
+    wf.connections['Read the handbook'].main[0].map((t) => t.node), ['Find the best answer']);
+});
+
+test('both outputs of the handbook model land on a sendable path', () => {
+  const chain = wf.nodes.find((n) => n.name === 'Answer from the handbook');
+  assert.equal(chain.onError, 'continueErrorOutput');
+  const [ok, err] = wf.connections['Answer from the handbook'].main;
+  assert.deepEqual(ok.map((t) => t.node), ['Tidy the answer']);
+  assert.deepEqual(err.map((t) => t.node), ['Tidy the answer']);
+
+  // The no-match branch skips the model and joins the same Set node.
+  const [, noMatch] = wf.connections['Anything relevant?'].main;
+  assert.deepEqual(noMatch.map((t) => t.node), ['Tidy the answer']);
 });
 
 test('the roster is read once per reply, not once per message', () => {
@@ -135,14 +180,15 @@ test('the README quotes the right number of nodes per placeholder', () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   assert.match(readme, new RegExp(`on all eight Sheets nodes`));
   assert.equal(count('n8n-nodes-base.googleSheets'), 8);
-  assert.match(readme, new RegExp(`on all six WhatsApp nodes`));
-  assert.equal(count('n8n-nodes-base.whatsApp'), 6);
+  assert.match(readme, new RegExp(`on all seven WhatsApp nodes`));
+  assert.equal(count('n8n-nodes-base.whatsApp'), 7);
 });
 
 test('every placeholder is spelled the way the README says', () => {
   const found = new Set([...JSON.stringify(wf).matchAll(/REPLACE_WITH_[A-Z_]+/g)].map((m) => m[0]));
   assert.deepEqual([...found].sort(), [
     'REPLACE_WITH_COACH_WHATSAPP_NUMBER',
+    'REPLACE_WITH_NOTION_DATA_SOURCE_ID',
     'REPLACE_WITH_PHONE_NUMBER_ID',
     'REPLACE_WITH_SPREADSHEET_ID',
   ]);
@@ -151,10 +197,10 @@ test('every placeholder is spelled the way the README says', () => {
 test('the shape the README describes is the shape on the canvas', () => {
   const count = (type) => wf.nodes.filter((n) => n.type === type).length;
   const sticky = count('n8n-nodes-base.stickyNote');
-  assert.equal(wf.nodes.length - sticky, 33, 'README says thirty-three nodes');
-  assert.equal(sticky, 4, 'README says four sticky notes');
+  assert.equal(wf.nodes.length - sticky, 40, 'README says forty nodes');
+  assert.equal(sticky, 5, 'README says five sticky notes');
   assert.equal(count('n8n-nodes-base.googleSheets'), 8, 'README says eight Sheets nodes');
-  assert.equal(count('n8n-nodes-base.whatsApp'), 6, 'README says six WhatsApp nodes');
+  assert.equal(count('n8n-nodes-base.whatsApp'), 7, 'README says seven WhatsApp nodes');
 });
 
 test('no credentials were exported with the workflow', () => {

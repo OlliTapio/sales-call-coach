@@ -138,6 +138,201 @@ test('parse: several messages in one webhook delivery all get rows', () => {
   ]);
 });
 
+test('parse: a question mark sends the reply to the handbook lane', () => {
+  assert.equal(parse('what is our refund window?')[0].looks_like_question, true);
+});
+
+test('parse: a question without the mark is still a question', () => {
+  assert.equal(parse('how do I log a no show')[0].looks_like_question, true);
+});
+
+test('parse: Finnish question openers count too', () => {
+  assert.equal(parse('miten kirjaan no-shown')[0].looks_like_question, true);
+});
+
+test('parse: a plain number is not a question', () => {
+  assert.equal(parse('6')[0].looks_like_question, false);
+});
+
+test('parse: "6?" is someone checking their own count, not a handbook question', () => {
+  assert.equal(parse('6?')[0].looks_like_question, false);
+});
+
+test('parse: a report that happens to contain a number still parses as a number', () => {
+  // The lane only reaches the handbook after the extractor has failed to find
+  // a count, so both flags being true is the wanted outcome, not a conflict.
+  const [row] = parse('did 6, is the CRM down?');
+  assert.equal(row.parsed, false);
+  assert.equal(row.looks_like_question, true);
+});
+
+
+// ---------------------------------------------------------------------------
+// Find the best answer
+// ---------------------------------------------------------------------------
+// Shaped the way the Notion node hands rows over with Simplify on: the title
+// column arrives as `name` as well, everything else as `property_<snake_case>`.
+const entry = (over = {}) => ({
+  id: 'page-id', url: 'https://www.notion.so/page-id',
+  property_question: '', property_answer: '', property_keywords: [], property_active: true,
+  ...over,
+});
+
+const HANDBOOK = [
+  entry({
+    url: 'https://www.notion.so/refunds',
+    property_question: 'What is our refund window?',
+    property_answer: 'Thirty days from the invoice date, no questions asked.',
+    property_keywords: ['refund', 'money back'],
+  }),
+  entry({
+    url: 'https://www.notion.so/no-shows',
+    property_question: 'How do I log a no-show?',
+    property_answer: 'Count it as a call and add "no-show" in your reply.',
+    property_keywords: ['noshow', 'cancelled'],
+  }),
+  entry({
+    property_question: 'What is the old launch discount code?',
+    property_answer: 'SPRING24, retired in June.',
+    property_keywords: ['discount'],
+    property_active: false,
+  }),
+  entry({
+    property_question: 'What is our escalation path?',
+    property_keywords: ['escalation'],
+  }),
+];
+
+const question = (raw_reply, over = {}) => ({
+  phone: '358401234567', name: 'Anna', raw_reply, looks_like_question: true, ...over,
+});
+
+function ask(raw_reply, { handbook = HANDBOOK, questions } = {}) {
+  return runCode('find-the-best-answer.js', {
+    items: handbook,
+    nodes: { 'Match rep & parse reply': questions ?? [question(raw_reply)] },
+  }).map((item) => item.json);
+}
+
+test('handbook: the row the rep asked about is the one that is offered', () => {
+  const [found] = ask('what is our refund window?');
+  assert.equal(found.matched, true);
+  assert.equal(found.matched_question, 'What is our refund window?');
+});
+
+test('handbook: a keyword catches a phrasing the question does not use', () => {
+  const [found] = ask('can I get my money back after a month');
+  assert.equal(found.matched_question, 'What is our refund window?');
+});
+
+test('handbook: nothing relevant keeps the model out of it', () => {
+  const [found] = ask('is the office open on saturday?');
+  assert.equal(found.matched, false);
+  assert.match(found.fallback_answer, /ask your coach/i);
+});
+
+test('handbook: a retired row is not offered', () => {
+  const [found] = ask('what is the old discount code?');
+  assert.equal(found.matched, false);
+});
+
+test('handbook: a row nobody has written the answer for yet is not offered', () => {
+  const [found] = ask('what is our escalation path?');
+  assert.equal(found.matched, false);
+});
+
+test('handbook: a row switched off as text, not a checkbox, is still off', () => {
+  const retired = [entry({
+    property_question: 'What is our refund window?',
+    property_answer: 'Thirty days.',
+    property_keywords: ['refund'],
+    property_active: 'FALSE',
+  })];
+  assert.equal(ask('what is our refund window?', { handbook: retired })[0].matched, false);
+});
+
+test('handbook: a handbook with no active column at all still answers', () => {
+  const plain = [{ name: 'What is our refund window?', url: '',
+    property_question: 'What is our refund window?', property_answer: 'Thirty days.' }];
+  assert.equal(ask('what is our refund window?', { handbook: plain })[0].matched, true);
+});
+
+test('handbook: keywords typed as one comma-separated cell work as well as tags', () => {
+  const csv = [entry({
+    property_question: 'What is our refund window?',
+    property_answer: 'Thirty days.',
+    property_keywords: 'refund, money back',
+  })];
+  assert.equal(ask('can I get my money back', { handbook: csv })[0].matched, true);
+});
+
+test('handbook: only the three best rows reach the model', () => {
+  const crowded = ['a', 'b', 'c', 'd', 'e'].map((suffix) =>
+    entry({
+      property_question: `What is our refund window ${suffix}?`,
+      property_answer: `Answer ${suffix}.`,
+      property_keywords: ['refund'],
+    }));
+
+  const [found] = ask('what is our refund window?', { handbook: crowded });
+  assert.equal(found.handbook.split('\n').filter((line) => line.startsWith('   A:')).length, 3);
+});
+
+test('handbook: the model is handed the rows, not the whole handbook', () => {
+  const [found] = ask('what is our refund window?');
+  assert.match(found.handbook, /Thirty days from the invoice date/);
+  assert.doesNotMatch(found.handbook, /no-show/);
+});
+
+test('handbook: the top row is the fallback, so a missing model still answers', () => {
+  const [found] = ask('what is our refund window?');
+  assert.equal(found.fallback_answer, 'Thirty days from the invoice date, no questions asked.');
+});
+
+test('handbook: the answer carries the page it came from', () => {
+  const [found] = ask('what is our refund window?');
+  assert.equal(found.source, 'https://www.notion.so/refunds');
+  assert.match(found.source_suffix, /^ — https:\/\/www\.notion\.so\/refunds$/);
+});
+
+test('handbook: no match means no link to append', () => {
+  assert.equal(ask('is the office open on saturday?')[0].source_suffix, '');
+});
+
+test('handbook: a Notion outage still produces something to send', () => {
+  const [found] = ask('what is our refund window?', { handbook: [{ error: 'Forbidden' }] });
+  assert.equal(found.handbook_size, 0);
+  assert.equal(found.matched, false);
+  assert.ok(found.fallback_answer.length > 0);
+});
+
+test('handbook: an empty handbook answers rather than going quiet', () => {
+  // What "Always Output Data" on the Notion node hands over when the database
+  // is empty: one item with nothing in it.
+  const [found] = ask('what is our refund window?', { handbook: [{}] });
+  assert.equal(found.matched, false);
+  assert.match(found.fallback_answer, /ask your coach/i);
+});
+
+test('handbook: replies that are not questions are left alone', () => {
+  const answers = ask(null, {
+    questions: [question('6', { looks_like_question: false }), question('what is our refund window?')],
+  });
+  assert.deepEqual(answers.map((a) => a.question), ['what is our refund window?']);
+});
+
+test('handbook: each question is answered to the rep who asked it', () => {
+  const answers = ask(null, {
+    questions: [
+      question('what is our refund window?'),
+      question('how do I log a no-show?', { phone: '358401234568', name: 'Mikko' }),
+    ],
+  });
+  assert.deepEqual(answers.map((a) => [a.name, a.phone, a.matched_question]), [
+    ['Anna', '358401234567', 'What is our refund window?'],
+    ['Mikko', '358401234568', 'How do I log a no-show?'],
+  ]);
+});
 
 // ---------------------------------------------------------------------------
 // Who still owes a number
