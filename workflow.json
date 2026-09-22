@@ -1,21 +1,21 @@
 {
-  "id": "salesCallTracker",
-  "name": "Sales call tracker - WhatsApp to Sheets",
+  "id": "smartScaleOsWhatsapp",
+  "name": "Smart Scale OS - WhatsApp coach",
   "nodes": [
     {
       "parameters": {
-        "content": "## 1 · Set the goal, every weekday at 08:30\nReads the **Roster** tab, keeps the people marked active, and tells each one what today's target is. Nobody is asked anything yet — they can report whenever they like.\n\nThe row is written to the **Log** tab straight away with `status = goal_set` and an empty `calls` cell. That empty cell is what lane 1b looks for at the end of the day, and what makes a *silent* day visible in the report — a blank is not a zero.\n\n`key` (`date|phone`) is built here and rebuilt by lanes 1b and 2, so everything that happens today updates this one row.",
-        "height": 200,
+        "content": "## 1 · Goals\nWeekdays 08:30. Two numbers and one focus, read off the founder row — not written by the model. The date key is minted here; tonight's reply rebuilds it and updates the same row instead of appending a second one.",
         "width": 1200,
+        "height": 180,
         "color": 4
       },
-      "id": "ecb2a9fe-a885-5065-854a-b8ef350573c9",
-      "name": "Lane 1 note",
+      "id": "b7e10001-0000-4000-8000-000000000001",
+      "name": "1 · Goals note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -280,
-        -240
+        -180
       ]
     },
     {
@@ -23,27 +23,18 @@
         "rule": {
           "interval": [
             {
-              "field": "weeks",
-              "weeksInterval": 1,
-              "triggerAtDay": [
-                1,
-                2,
-                3,
-                4,
-                5
-              ],
-              "triggerAtHour": 8,
-              "triggerAtMinute": 30
+              "field": "cronExpression",
+              "expression": "30 8 * * 1-5"
             }
           ]
         }
       },
-      "id": "13928357-85ec-5b27-b829-f827f0d9be8b",
+      "id": "b7e10002-0000-4000-8000-000000000002",
       "name": "Weekdays 08:30",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.3,
+      "typeVersion": 1.2,
       "position": [
-        -240,
+        -260,
         40
       ]
     },
@@ -57,286 +48,33 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Roster"
+          "value": "Founders"
         },
         "options": {
           "returnAllMatches": "returnAllMatches"
         }
       },
-      "id": "146faca8-88fc-5c54-b311-7695653f593b",
-      "name": "Get the roster",
+      "id": "b7e10003-0000-4000-8000-000000000003",
+      "name": "Get the founders",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -20,
+        -40,
         40
       ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Roster rows in, one morning goal per active rep out.\r\n//\r\n// The date key is built here and nowhere else. The reply and nudge workflows\r\n// rebuild the same key, which is how an answer finds the row its goal created\r\n// instead of appending a second one.\r\nconst ZONE = 'Europe/Helsinki';\r\n\r\nconst today = $now.setZone(ZONE);\r\nconst dateKey = today.toFormat('yyyy-MM-dd');\r\n\r\nconst asks = [];\r\n\r\nfor (const item of $input.all()) {\r\n  const rep = item.json;\r\n\r\n  const active = String(rep.active ?? '').trim().toLowerCase();\r\n  if (!['true', 'yes', '1', 'x'].includes(active)) continue;\r\n\r\n  // Sheets hands phone numbers back as text or as a number, with or without\r\n  // a +. WhatsApp always reports the sender as bare digits, so normalise to that.\r\n  const phone = String(rep.phone ?? '').replace(/\\D/g, '');\r\n  if (!phone) continue;\r\n\r\n  const target = Number(rep.daily_target) || 8;\r\n\r\n  asks.push({\r\n    json: {\r\n      key: `${dateKey}|${phone}`,\r\n      date: dateKey,\r\n      weekday: today.toFormat('ccc'),\r\n      name: String(rep.name ?? '').trim() || phone,\r\n      phone,\r\n      target,\r\n      calls: '',\r\n      status: 'goal_set',\r\n      note: '',\r\n      raw_reply: '',\r\n      logged_at: today.toISO(),\r\n    },\r\n  });\r\n}\r\n\r\nreturn asks;\r"
+        "jsCode": "// Founder rows in, one morning message per active founder out.\n//\n// The day's goals are read off the founder's row, not invented here and not\n// written by the model. Two numbers and one focus is the whole commitment: a\n// founder who has to read a paragraph before breakfast stops reading it by\n// Wednesday.\n//\n// The date key is built here and nowhere else. The reply lane rebuilds the\n// same key, which is how tonight's answer finds this morning's row instead of\n// appending a second one.\nconst ZONE = 'Europe/Helsinki';\n\n// The four things Smart Scale OS scores. The daily lane does not score them —\n// it only reminds the founder which one this month belongs to, so the number\n// they report has a reason attached to it. Scoring is the weekly job (TODO).\nconst FOCUS = {\n  close: {\n    label: 'Close Rate',\n    line: 'Every call you take is one your closer never learns to win alone.',\n  },\n  profit: {\n    label: 'Net Profit',\n    line: 'Every point of discount comes straight off your target. Hold the floor price.',\n  },\n  hours: {\n    label: 'Founder Hours',\n    line: 'Every hour in operational decisions is an hour not spent on thought leadership.',\n  },\n  pipe: {\n    label: 'Pipeline',\n    line: 'Pipeline is a cadence problem. The market forgets you in two quiet weeks.',\n  },\n};\n\nconst today = $now.setZone(ZONE);\nconst dateKey = today.toFormat('yyyy-MM-dd');\n\nconst goals = [];\n\nfor (const item of $input.all()) {\n  const founder = item.json;\n\n  const active = String(founder.active ?? '').trim().toLowerCase();\n  if (!['true', 'yes', '1', 'x'].includes(active)) continue;\n\n  // Sheets hands phone numbers back as text or as a number, with or without a\n  // +. WhatsApp always reports the sender as bare digits, so normalise to that.\n  const phone = String(founder.phone ?? '').replace(/\\D/g, '');\n  if (!phone) continue;\n\n  const name = String(founder.name ?? '').trim() || phone;\n  const first = name.split(/\\s+/)[0];\n\n  const callsTarget = Number(founder.calls_target) || 0;\n  const hoursCap = Number(founder.hours_cap) || 0;\n\n  const focusKey = String(founder.focus ?? '').trim().toLowerCase();\n  const focus = FOCUS[focusKey];\n\n  // A founder with no focus set still gets their numbers. The reminder is the\n  // part that is optional, not the commitment.\n  const reminder = focus ? `\\n\\nFocus: *${focus.label}*. ${focus.line}` : '';\n\n  goals.push({\n    json: {\n      key: `${dateKey}|${phone}`,\n      date: dateKey,\n      weekday: today.toFormat('ccc'),\n      name,\n      phone,\n      focus: focusKey,\n      calls_target: callsTarget,\n      calls: '',\n      hours_cap: hoursCap,\n      hours: '',\n      status: 'goal_set',\n      note: '',\n      raw_reply: '',\n      logged_at: today.toISO(),\n      message:\n        `Morning ${first}. Today: *${callsTarget} sales calls*, and stay under `\n        + `*${hoursCap}h* on them.${reminder}\\n\\nTell me how it went tonight — `\n        + `\"${callsTarget}/${hoursCap}\" is enough, or just talk to me.`,\n    },\n  });\n}\n\nreturn goals;"
       },
-      "id": "3ed99b80-f099-500f-8b09-2bba0d2a89de",
-      "name": "Pick today's reps",
+      "id": "b7e10004-0000-4000-8000-000000000004",
+      "name": "Set today's goals",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        200,
+        180,
         40
-      ]
-    },
-    {
-      "parameters": {
-        "resource": "message",
-        "operation": "sendTemplate",
-        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $json.phone }}",
-        "template": "daily_sales_goal|en",
-        "components": {
-          "component": [
-            {
-              "type": "body",
-              "bodyParameters": {
-                "parameter": [
-                  {
-                    "type": "text",
-                    "text": "={{ $json.name }}"
-                  },
-                  {
-                    "type": "text",
-                    "text": "={{ $json.target }}"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      "id": "7d81e469-b097-57b0-91d9-667938ae6e09",
-      "name": "Send today's goal",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
-      "position": [
-        420,
-        40
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "operation": "appendOrUpdate",
-        "documentId": {
-          "__rl": true,
-          "mode": "id",
-          "value": "REPLACE_WITH_SPREADSHEET_ID"
-        },
-        "sheetName": {
-          "__rl": true,
-          "mode": "name",
-          "value": "Log"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "key": "={{ $json.key }}",
-            "date": "={{ $json.date }}",
-            "weekday": "={{ $json.weekday }}",
-            "name": "={{ $json.name }}",
-            "phone": "={{ $json.phone }}",
-            "target": "={{ $json.target }}",
-            "calls": "={{ $json.calls }}",
-            "status": "={{ $json.status }}",
-            "note": "={{ $json.note }}",
-            "raw_reply": "={{ $json.raw_reply }}",
-            "logged_at": "={{ $json.logged_at }}"
-          },
-          "matchingColumns": [
-            "key"
-          ],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "cellFormat": "USER_ENTERED"
-        }
-      },
-      "id": "ed1a2a13-2437-5ee4-bf9e-356f3378658c",
-      "name": "Log the goal",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        640,
-        40
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 1b · Nudge the quiet ones, 16:30\nReads the **Log**, keeps today's rows whose `calls` cell is still empty, and reminds only those people. Anyone who already reported hears nothing.\n\n**Why the fork.** WhatsApp only allows free-form text within 24 hours of the person's own last message. Inside that window Claude writes a nudge from their week so far; outside it the message legally has to be an approved template, so it is one. The window state is computed in **Who still owes a number**, from the log's own reply timestamps.\n\n**Write the nudge** continues on error, so a missing Anthropic credential lands on the template path rather than skipping the nudge.",
-        "height": 560,
-        "width": 1760,
-        "color": 4
-      },
-      "id": "b8243169-6f38-583b-a065-0e07adcae6f1",
-      "name": "Lane 1b note",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -280,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "weeks",
-              "weeksInterval": 1,
-              "triggerAtDay": [
-                1,
-                2,
-                3,
-                4,
-                5
-              ],
-              "triggerAtHour": 16,
-              "triggerAtMinute": 30
-            }
-          ]
-        }
-      },
-      "id": "561bb983-a97e-5fb2-a5b8-386dea40c273",
-      "name": "Nudge at 16:30",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.3,
-      "position": [
-        -240,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "documentId": {
-          "__rl": true,
-          "mode": "id",
-          "value": "REPLACE_WITH_SPREADSHEET_ID"
-        },
-        "sheetName": {
-          "__rl": true,
-          "mode": "name",
-          "value": "Log"
-        },
-        "options": {
-          "returnAllMatches": "returnAllMatches"
-        }
-      },
-      "id": "65b8e52a-db7c-58c5-aab4-68f1dba37d52",
-      "name": "Read the log (nudge)",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        -20,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Log rows in, one nudge out per rep who has not reported today.\r\n//\r\n// This node also decides HOW each nudge can be sent. WhatsApp only allows\r\n// free-form text within 24 hours of the person's own last message; outside that\r\n// window a business-initiated message has to be an approved template with fixed\r\n// wording. So the window state is worked out here, from the log itself, and the\r\n// two send paths diverge on it downstream.\r\nconst ZONE = 'Europe/Helsinki';\r\nconst WINDOW_HOURS = 24;\r\nconst DAY_ROLLOVER_HOUR = 4; // must match the reply parser\r\n\r\nconst now = $now.setZone(ZONE);\r\nconst forDay = now.hour < DAY_ROLLOVER_HOUR ? now.minus({ days: 1 }) : now;\r\nconst today = forDay.toFormat('yyyy-MM-dd');\r\n\r\n// Context for the model is a rolling week, not the calendar one. On a Monday a\r\n// calendar week holds nothing but today, and every rep would be greeted as if\r\n// they had just joined.\r\nconst contextFrom = forDay.minus({ days: 7 }).startOf('day');\r\n\r\n// One pass over the log builds everything: when each rep last messaged us, how\r\n// their last seven days went, and which of today's rows are still unanswered.\r\nconst lastInbound = new Map();\r\nconst recent = new Map();\r\nconst pending = [];\r\n\r\nconst answeredValue = (row) => {\r\n  const v = row.calls;\r\n  if (v === '' || v === null || v === undefined) return null;\r\n  const n = Number(v);\r\n  return Number.isFinite(n) ? n : null;\r\n};\r\n\r\nfor (const item of $input.all()) {\r\n  const row = item.json;\r\n  const phone = String(row.phone ?? '').replace(/\\D/g, '');\r\n  if (!phone) continue;\r\n\r\n  // Only a row carrying an actual reply tells us the customer-service window\r\n  // was open at that moment.\r\n  if (String(row.raw_reply ?? '').trim()) {\r\n    const at = DateTime.fromISO(String(row.logged_at ?? ''), { zone: ZONE });\r\n    if (at.isValid && (!lastInbound.has(phone) || at > lastInbound.get(phone))) {\r\n      lastInbound.set(phone, at);\r\n    }\r\n  }\r\n\r\n  // Today is excluded: the context describes the run-up, not the day being asked about.\r\n  const date = DateTime.fromFormat(String(row.date ?? ''), 'yyyy-MM-dd', { zone: ZONE });\r\n  if (date.isValid && date >= contextFrom && date < forDay.startOf('day')) {\r\n    if (!recent.has(phone)) recent.set(phone, { set: 0, reported: 0, calls: 0, target: 0, hit: 0 });\r\n    const w = recent.get(phone);\r\n    const target = Number(row.target) || 0;\r\n    const calls = answeredValue(row);\r\n    w.set += 1;\r\n    w.target += target;\r\n    if (calls !== null) {\r\n      w.reported += 1;\r\n      w.calls += calls;\r\n      if (target > 0 && calls >= target) w.hit += 1;\r\n    }\r\n  }\r\n\r\n  if (String(row.date ?? '') === today) pending.push({ row, phone });\r\n}\r\n\r\nfunction contextLine(phone) {\r\n  const w = recent.get(phone);\r\n  if (!w || w.set === 0) return 'First day being tracked.';\r\n  return `Last 7 days: reported on ${w.reported} of ${w.set} days, `\r\n    + `${w.calls} calls against a target of ${w.target}, hit the daily target ${w.hit} time(s).`;\r\n}\r\n\r\nconst out = [];\r\n\r\nfor (const { row, phone } of pending) {\r\n  if (answeredValue(row) !== null) continue;                  // already reported\r\n  if (String(row.status ?? '') === 'nudged') continue;        // already nudged today\r\n\r\n  const at = lastInbound.get(phone);\r\n  const hoursSince = at ? now.diff(at, 'hours').hours : null;\r\n\r\n  out.push({\r\n    json: {\r\n      key: String(row.key ?? `${today}|${phone}`),\r\n      date: today,\r\n      weekday: forDay.toFormat('ccc'),\r\n      name: String(row.name ?? '').trim() || phone,\r\n      phone,\r\n      target: Number(row.target) || 8,\r\n      calls: '',\r\n      status: 'nudged',\r\n      note: 'nudge sent',\r\n      raw_reply: '',\r\n      logged_at: now.toISO(),\r\n      // routing + prompt material, not spreadsheet columns\r\n      window_open: hoursSince !== null && hoursSince < WINDOW_HOURS,\r\n      hours_since_last_reply: hoursSince === null ? null : Math.round(hoursSince),\r\n      context: contextLine(phone),\r\n    },\r\n  });\r\n}\r\n\r\nreturn out;\r"
-      },
-      "id": "2c6c5d24-7ecd-5630-8313-380ea564bc17",
-      "name": "Who still owes a number",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        200,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "cacd124b-16da-4caa-a431-082b03ef8f3b",
-              "leftValue": "={{ $json.window_open }}",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "rightValue": ""
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "5228954f-6675-5967-88d5-beafc875f784",
-      "name": "Can we message freely?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        420,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Rep: {{ $json.name }}\nToday's goal: {{ $json.target }} calls\n{{ $json.context }}\nThey have not reported a number today.\n\nWrite the nudge.",
-        "messages": {
-          "messageValues": [
-            {
-              "type": "SystemMessagePromptTemplate",
-              "message": "You write one-line WhatsApp nudges for a sales coach. Warm and specific, at most 25 words, no emoji, no greeting boilerplate. Use only the numbers you are given - never invent one. Always end by asking how many calls they made today. Reply with the message text only."
-            }
-          ]
-        }
-      },
-      "id": "4a22ea97-3105-5256-8337-3a7d9d62771d",
-      "name": "Write the nudge",
-      "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "typeVersion": 1.9,
-      "position": [
-        660,
-        560
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "mode": "manual",
-        "includeOtherFields": false,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "df713df7-c5d1-5afa-a914-a4455ded07f4",
-              "name": "message",
-              "value": "={{ ($json.text || '').trim().replace(/^[\"']|[\"']$/g, '').slice(0, 900) || ('Hi ' + $('Who still owes a number').item.json.name + \" - how many calls did \" + 'you get done today?') }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "73e3cdd0-7367-5b2c-8dfb-a841ef66aca3",
-      "name": "Tidy the nudge",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        900,
-        560
       ]
     },
     {
@@ -344,60 +82,18 @@
         "resource": "message",
         "operation": "send",
         "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Who still owes a number').item.json.phone }}",
+        "recipientPhoneNumber": "={{ $json.phone }}",
         "messageType": "text",
         "textBody": "={{ $json.message }}"
       },
-      "id": "f3048f20-b97f-50cc-871f-b450038a7e54",
-      "name": "Nudge in chat",
+      "id": "b7e10005-0000-4000-8000-000000000005",
+      "name": "Send the goals",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
       "position": [
-        1140,
-        560
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "resource": "message",
-        "operation": "sendTemplate",
-        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Who still owes a number').item.json.phone }}",
-        "template": "daily_sales_nudge|en",
-        "components": {
-          "component": [
-            {
-              "type": "body",
-              "bodyParameters": {
-                "parameter": [
-                  {
-                    "type": "text",
-                    "text": "={{ $('Who still owes a number').item.json.name }}"
-                  },
-                  {
-                    "type": "text",
-                    "text": "={{ $('Who still owes a number').item.json.target }}"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      "id": "39f4ebed-5df3-5099-ab88-28f342f1a312",
-      "name": "Nudge by template",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
-      "position": [
-        900,
-        380
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+        400,
+        40
+      ]
     },
     {
       "parameters": {
@@ -410,22 +106,25 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Log"
+          "value": "Days"
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "key": "={{ $('Who still owes a number').item.json.key }}",
-            "date": "={{ $('Who still owes a number').item.json.date }}",
-            "weekday": "={{ $('Who still owes a number').item.json.weekday }}",
-            "name": "={{ $('Who still owes a number').item.json.name }}",
-            "phone": "={{ $('Who still owes a number').item.json.phone }}",
-            "target": "={{ $('Who still owes a number').item.json.target }}",
-            "calls": "={{ $('Who still owes a number').item.json.calls }}",
-            "status": "={{ $('Who still owes a number').item.json.status }}",
-            "note": "={{ $('Who still owes a number').item.json.note }}",
-            "raw_reply": "={{ $('Who still owes a number').item.json.raw_reply }}",
-            "logged_at": "={{ $('Who still owes a number').item.json.logged_at }}"
+            "key": "={{ $('Set today\\'s goals').item.json.key }}",
+            "date": "={{ $('Set today\\'s goals').item.json.date }}",
+            "weekday": "={{ $('Set today\\'s goals').item.json.weekday }}",
+            "name": "={{ $('Set today\\'s goals').item.json.name }}",
+            "phone": "={{ $('Set today\\'s goals').item.json.phone }}",
+            "focus": "={{ $('Set today\\'s goals').item.json.focus }}",
+            "calls_target": "={{ $('Set today\\'s goals').item.json.calls_target }}",
+            "calls": "={{ $('Set today\\'s goals').item.json.calls }}",
+            "hours_cap": "={{ $('Set today\\'s goals').item.json.hours_cap }}",
+            "hours": "={{ $('Set today\\'s goals').item.json.hours }}",
+            "status": "={{ $('Set today\\'s goals').item.json.status }}",
+            "note": "={{ $('Set today\\'s goals').item.json.note }}",
+            "raw_reply": "={{ $('Set today\\'s goals').item.json.raw_reply }}",
+            "logged_at": "={{ $('Set today\\'s goals').item.json.logged_at }}"
           },
           "matchingColumns": [
             "key"
@@ -438,29 +137,29 @@
           "cellFormat": "USER_ENTERED"
         }
       },
-      "id": "37894efd-8ac7-5986-8de6-2db7eab110f8",
-      "name": "Log the nudge",
+      "id": "b7e10006-0000-4000-8000-000000000006",
+      "name": "Log the goals",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        1380,
-        460
+        620,
+        40
       ]
     },
     {
       "parameters": {
-        "content": "## 2 · Collect the reply\nCheap path first: a bare number, \"all\" or \"none\" is parsed in code and costs nothing. Only the tail — *\"did 6, two no-shows\"* — reaches the model.\n\n**Read it with Claude** is set to *continue using error output*, so a missing Anthropic credential degrades to \"reply with a plain number\" instead of dropping the answer.\n\nThe upsert matches on `key`, so a reply lands on the row this morning's nudge created.",
-        "height": 240,
-        "width": 2200,
-        "color": 4
+        "content": "## 2 · Check-in\nThe regex owns the log. \"6\", \"6/3\" and \"none\" are read here and written straight to the sheet — no model touches the number on a normal evening. Everything else is handed to the coach in lane 3.",
+        "width": 1200,
+        "height": 180,
+        "color": 5
       },
-      "id": "f1791984-b6d4-5da4-ad17-e39b4e2e03c0",
-      "name": "Lane 2 note",
+      "id": "b7e10007-0000-4000-8000-000000000007",
+      "name": "2 · Check-in note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -280,
-        900
+        340
       ]
     },
     {
@@ -472,13 +171,13 @@
           "messageStatusUpdates": []
         }
       },
-      "id": "43b427d4-2148-58f9-b8b5-4dbe54e41774",
+      "id": "b7e10008-0000-4000-8000-000000000008",
       "name": "WhatsApp Trigger",
       "type": "n8n-nodes-base.whatsAppTrigger",
       "typeVersion": 1,
       "position": [
-        -240,
-        1220
+        -260,
+        560
       ]
     },
     {
@@ -492,7 +191,7 @@
           },
           "conditions": [
             {
-              "id": "a0d649f9-fb69-42a7-aed7-9bf34f83bc0f",
+              "id": "b7e10009-0000-4000-8000-000000000009",
               "leftValue": "={{ ($json.messages || []).filter(m => m.type === 'text').length }}",
               "operator": {
                 "type": "number",
@@ -505,13 +204,13 @@
         },
         "options": {}
       },
-      "id": "533203df-63be-560a-9aa2-6366a1bf7dca",
+      "id": "b7e10010-0000-4000-8000-000000000010",
       "name": "Is it a text reply?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -20,
-        1220
+        -40,
+        560
       ]
     },
     {
@@ -524,34 +223,34 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Roster"
+          "value": "Founders"
         },
         "options": {
           "returnAllMatches": "returnAllMatches"
         }
       },
-      "id": "400b6089-171e-5dc0-8ffa-deae0382b72b",
-      "name": "Get the roster (reply)",
+      "id": "b7e10011-0000-4000-8000-000000000011",
+      "name": "Get the founders (reply)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        200,
-        1220
+        180,
+        560
       ],
       "executeOnce": true
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// One output item per inbound text message from someone on the roster.\n//\n// Deterministic parse first, model second. A bare number, \"all\" or \"none\"\n// covers almost every reply and costs nothing; only the tail — \"did 6, two\n// no-shows\" — reaches the LLM branch. Putting the cheap path first is also\n// what keeps this debuggable: most executions never touch a model at all.\nconst ZONE = 'Europe/Helsinki';\n\n// A reply typed at 00:30 is about the day that just ended, not the new one.\nconst DAY_ROLLOVER_HOUR = 4;\n\nconst ALL_WORDS = ['all', 'all of them', 'yes', 'yep', 'yup', 'done', 'all done', 'kaikki', 'joo', 'kyllä'];\nconst NONE_WORDS = ['none', 'no', 'nope', 'zero', '0', 'ei', 'en yhtään'];\n\n// Openers that make a sentence a question even without a question mark.\nconst QUESTION_WORDS = [\n  'what', 'whats', 'how', 'why', 'when', 'where', 'which', 'who', 'can', 'could', 'do',\n  'does', 'is', 'are', 'should', 'any', 'anyone', 'tell', 'help',\n  'mitä', 'mikä', 'miten', 'kuinka', 'miksi', 'milloin', 'missä', 'kuka', 'onko', 'voiko',\n  'voinko', 'saako', 'kerro', 'apua',\n];\n\nfunction parse(text, target) {\n  const clean = text.trim().toLowerCase();\n\n  if (ALL_WORDS.includes(clean)) return { calls: target, how: 'all' };\n  if (NONE_WORDS.includes(clean)) return { calls: 0, how: 'none' };\n\n  // Only trust a bare number when the message is essentially just that number\n  // (\"6\", \"6/8\", \"6 calls\"). A longer sentence goes to the model, so that\n  // \"tomorrow I'll do 8\" is not logged as eight calls today.\n  if (clean.length <= 12) {\n    const match = clean.match(/(?<!\\d)(\\d{1,3})(?!\\d)/);\n    if (match) {\n      const n = Number(match[1]);\n      if (n >= 0 && n <= 100) return { calls: n, how: 'number' };\n    }\n  }\n\n  return { calls: null, how: 'unparsed' };\n}\n\n// Reps ask things as well as report numbers. This only decides where the\n// message goes, not what the answer is — and it is checked after the number\n// has been looked for, so \"did 6, why is the CRM down?\" is still logged as six.\nfunction looksLikeQuestion(text) {\n  const clean = text.trim().toLowerCase();\n  const words = clean.split(/\\s+/).filter(Boolean);\n\n  // \"?\" or \"6?\" on its own is someone querying their own number, not asking\n  // the handbook anything it could match.\n  if (words.length < 2) return false;\n\n  if (clean.includes('?')) return true;\n\n  return QUESTION_WORDS.includes(words[0].replace(/[^\\p{L}]/gu, ''));\n}\n\n// The roster arrives on this node's input; the messages come from the trigger.\nconst roster = new Map();\nfor (const item of $input.all()) {\n  const phone = String(item.json.phone ?? '').replace(/\\D/g, '');\n  if (phone) roster.set(phone, item.json);\n}\n\nconst out = [];\n\nfor (const event of $('WhatsApp Trigger').all()) {\n  for (const message of event.json.messages ?? []) {\n    if (message.type !== 'text') continue;\n\n    const phone = String(message.from ?? '').replace(/\\D/g, '');\n    const rep = roster.get(phone);\n\n    // Someone not on the roster messaged the business number. Not ours to log.\n    if (!rep) continue;\n\n    const text = String(message.text?.body ?? '').trim();\n    const target = Number(rep.daily_target) || 8;\n\n    const stamp = Number(message.timestamp);\n    const receivedAt = Number.isFinite(stamp) && stamp > 0\n      ? DateTime.fromSeconds(stamp).setZone(ZONE)\n      : $now.setZone(ZONE);\n\n    const forDay = receivedAt.hour < DAY_ROLLOVER_HOUR\n      ? receivedAt.minus({ days: 1 })\n      : receivedAt;\n\n    const dateKey = forDay.toFormat('yyyy-MM-dd');\n    const { calls, how } = parse(text, target);\n\n    out.push({\n      json: {\n        key: `${dateKey}|${phone}`,\n        date: dateKey,\n        weekday: forDay.toFormat('ccc'),\n        name: String(rep.name ?? '').trim() || phone,\n        phone,\n        target,\n        calls: calls === null ? '' : calls,\n        status: calls === null ? 'unparsed' : 'answered',\n        note: how,\n        raw_reply: text,\n        logged_at: receivedAt.toISO(),\n        parsed: calls !== null,\n        looks_like_question: looksLikeQuestion(text),\n        message_id: message.id ?? '',\n      },\n    });\n  }\n}\n\nreturn out;"
+        "jsCode": "// One output item per inbound text message from someone on the founder list.\n//\n// Deterministic parse first, agent second. \"6\", \"6/3\" and \"none\" cover the\n// evening check-in and cost nothing; everything else — a question, an excuse,\n// a paragraph about a deal that went sideways — is handed to the agent. Putting\n// the cheap path first is what keeps the log trustworthy: the number that ends\n// up in the spreadsheet on a normal evening was read by a regex, not chosen by\n// a model.\nconst ZONE = 'Europe/Helsinki';\n\n// A reply typed at 00:30 is about the day that just ended, not the new one.\nconst DAY_ROLLOVER_HOUR = 4;\n\nconst ALL_WORDS = ['all', 'all of them', 'yes', 'yep', 'yup', 'done', 'all done', 'kaikki', 'joo', 'kyllä'];\nconst NONE_WORDS = ['none', 'no', 'nope', 'zero', '0', 'ei', 'en yhtään'];\n\n// Nobody works more than this in a day, so a bigger number is a typo or a\n// different unit and belongs to the agent to sort out.\nconst MAX_HOURS = 18;\nconst MAX_CALLS = 100;\n\n// A bare count, or a count and the hours it took: \"6\", \"6/3\", \"6 / 3\", \"6-3\".\n// Only trusted when the message is essentially just that, so \"tomorrow I'll do\n// 8\" is never logged as eight calls today.\nfunction parse(text, callsTarget) {\n  const clean = text.trim().toLowerCase();\n\n  if (ALL_WORDS.includes(clean)) return { calls: callsTarget, hours: null, how: 'all' };\n  if (NONE_WORDS.includes(clean)) return { calls: 0, hours: null, how: 'none' };\n\n  if (clean.length > 12) return { calls: null, hours: null, how: 'unparsed' };\n\n  const pair = clean.match(/^(\\d{1,3})\\s*[/\\-,]\\s*(\\d{1,2}(?:[.,]\\d)?)\\s*h?$/);\n  if (pair) {\n    const calls = Number(pair[1]);\n    const hours = Number(pair[2].replace(',', '.'));\n    if (calls <= MAX_CALLS && hours <= MAX_HOURS) return { calls, hours, how: 'calls+hours' };\n    return { calls: null, hours: null, how: 'unparsed' };\n  }\n\n  const single = clean.match(/(?<!\\d)(\\d{1,3})(?!\\d)/);\n  if (single) {\n    const calls = Number(single[1]);\n    if (calls <= MAX_CALLS) return { calls, hours: null, how: 'calls' };\n  }\n\n  return { calls: null, hours: null, how: 'unparsed' };\n}\n\n// The founder list arrives on this node's input; the messages come from the\n// trigger.\nconst founders = new Map();\nfor (const item of $input.all()) {\n  const phone = String(item.json.phone ?? '').replace(/\\D/g, '');\n  if (phone) founders.set(phone, item.json);\n}\n\nconst out = [];\n\nfor (const event of $('WhatsApp Trigger').all()) {\n  for (const message of event.json.messages ?? []) {\n    if (message.type !== 'text') continue;\n\n    const phone = String(message.from ?? '').replace(/\\D/g, '');\n    const founder = founders.get(phone);\n\n    // Someone not on the list messaged the business number. Not ours to log.\n    if (!founder) continue;\n\n    const text = String(message.text?.body ?? '').trim();\n    const callsTarget = Number(founder.calls_target) || 0;\n    const hoursCap = Number(founder.hours_cap) || 0;\n\n    const stamp = Number(message.timestamp);\n    const receivedAt = Number.isFinite(stamp) && stamp > 0\n      ? DateTime.fromSeconds(stamp).setZone(ZONE)\n      : $now.setZone(ZONE);\n\n    const forDay = receivedAt.hour < DAY_ROLLOVER_HOUR\n      ? receivedAt.minus({ days: 1 })\n      : receivedAt;\n\n    const dateKey = forDay.toFormat('yyyy-MM-dd');\n    const { calls, hours, how } = parse(text, callsTarget);\n\n    out.push({\n      json: {\n        key: `${dateKey}|${phone}`,\n        date: dateKey,\n        weekday: forDay.toFormat('ccc'),\n        name: String(founder.name ?? '').trim() || phone,\n        phone,\n        focus: String(founder.focus ?? '').trim().toLowerCase(),\n        calls_target: callsTarget,\n        calls: calls === null ? '' : calls,\n        hours_cap: hoursCap,\n        hours: hours === null ? '' : hours,\n        status: calls === null ? 'unparsed' : 'logged',\n        note: how,\n        raw_reply: text,\n        logged_at: receivedAt.toISO(),\n        // Routing only. True means the regex read a number and the agent is\n        // not needed; false hands the whole message over.\n        parsed: calls !== null,\n        message_id: message.id ?? '',\n      },\n    });\n  }\n}\n\nreturn out;"
       },
-      "id": "9715adb1-310c-5c95-919b-760e730a51ae",
-      "name": "Match rep & parse reply",
+      "id": "b7e10012-0000-4000-8000-000000000012",
+      "name": "Match founder & parse reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        420,
-        1220
+        400,
+        560
       ]
     },
     {
@@ -565,7 +264,7 @@
           },
           "conditions": [
             {
-              "id": "f61cbf67-d5a8-4694-84ea-f14079066f26",
+              "id": "b7e10013-0000-4000-8000-000000000013",
               "leftValue": "={{ $json.parsed }}",
               "operator": {
                 "type": "boolean",
@@ -579,188 +278,13 @@
         },
         "options": {}
       },
-      "id": "5281a74c-70a6-51a7-a00d-82e8105c0828",
-      "name": "Understood the reply?",
+      "id": "b7e10014-0000-4000-8000-000000000014",
+      "name": "Did the regex read it?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        640,
-        1220
-      ]
-    },
-    {
-      "parameters": {
-        "text": "={{ $json.raw_reply }}",
-        "schemaType": "fromAttributes",
-        "attributes": {
-          "attributes": [
-            {
-              "name": "calls",
-              "type": "number",
-              "required": false,
-              "description": "=Number of sales calls the person says they completed today. Their daily target is {{ $json.target }}; if they say they did all of them, that is the number. Count only calls already made — ignore calls they plan to make later. Leave empty if no count can be determined from the message."
-            },
-            {
-              "name": "note",
-              "type": "string",
-              "required": false,
-              "description": "Anything the person said about why, in at most six words (for example 'two no-shows' or 'sick'). Empty if they gave no reason."
-            }
-          ]
-        },
-        "options": {
-          "systemPromptTemplate": "You are reading a sales rep's WhatsApp reply to \"how many calls did you make today?\". Extract only what the message actually states. Do not guess a number."
-        }
-      },
-      "id": "3f17ba15-c1db-5fa0-86c8-f26862484e1c",
-      "name": "Read it with Claude",
-      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
-      "typeVersion": 1.2,
-      "position": [
-        860,
-        1060
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "list",
-          "value": "claude-opus-5",
-          "cachedResultName": "Claude Opus 5"
-        },
-        "options": {
-          "maxTokensToSample": 2048,
-          "thinkingMode": "adaptive",
-          "effort": "low"
-        }
-      },
-      "id": "f41dbbee-ffa1-5b96-81cd-15911e9e2c8f",
-      "name": "Claude",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.6,
-      "position": [
-        660,
-        820
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "manual",
-        "includeOtherFields": false,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "50f89e01-772d-5797-913f-62bc58d53c35",
-              "name": "key",
-              "value": "={{ $('Match rep & parse reply').item.json.key }}",
-              "type": "string"
-            },
-            {
-              "id": "1c9a77d8-581c-59b9-befc-3e3f67f5c2e5",
-              "name": "date",
-              "value": "={{ $('Match rep & parse reply').item.json.date }}",
-              "type": "string"
-            },
-            {
-              "id": "d133c11a-e002-594c-a411-5fd8d62dcede",
-              "name": "weekday",
-              "value": "={{ $('Match rep & parse reply').item.json.weekday }}",
-              "type": "string"
-            },
-            {
-              "id": "f6dc0ad9-c990-5a01-b642-84c446592ab2",
-              "name": "name",
-              "value": "={{ $('Match rep & parse reply').item.json.name }}",
-              "type": "string"
-            },
-            {
-              "id": "734be535-2b74-5436-9e2c-df5ac060ed4c",
-              "name": "phone",
-              "value": "={{ $('Match rep & parse reply').item.json.phone }}",
-              "type": "string"
-            },
-            {
-              "id": "9630cc65-47e4-5e11-b099-0b531b253f26",
-              "name": "target",
-              "value": "={{ $('Match rep & parse reply').item.json.target }}",
-              "type": "number"
-            },
-            {
-              "id": "ba02b5a7-45c3-5540-bd3f-39596c7cfcbb",
-              "name": "calls",
-              "value": "={{ $json.output?.calls ?? '' }}",
-              "type": "string"
-            },
-            {
-              "id": "cae7e56a-0e0c-53fd-bf6f-135fec08423e",
-              "name": "status",
-              "value": "={{ ($json.output?.calls ?? null) === null ? 'unparsed' : 'answered' }}",
-              "type": "string"
-            },
-            {
-              "id": "51b6d215-2fac-5774-a73b-8665f6c51cbc",
-              "name": "note",
-              "value": "={{ $json.output?.note || 'read by model' }}",
-              "type": "string"
-            },
-            {
-              "id": "08632df0-8ac5-5d41-8304-b5153fc51284",
-              "name": "raw_reply",
-              "value": "={{ $('Match rep & parse reply').item.json.raw_reply }}",
-              "type": "string"
-            },
-            {
-              "id": "bd3976ce-78e1-5a0d-b801-b09acc416619",
-              "name": "logged_at",
-              "value": "={{ $('Match rep & parse reply').item.json.logged_at }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "4e5b8970-fbd5-5816-a059-f57e082d60ff",
-      "name": "Apply the model's answer",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        1080,
-        1060
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "fa36324f-4bad-4e2a-a849-252f5d5fb51c",
-              "leftValue": "={{ ($json.calls === '' || $json.calls === null || $json.calls === undefined) ? -1 : Number($json.calls) }}",
-              "operator": {
-                "type": "number",
-                "operation": "gte"
-              },
-              "rightValue": 0
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "b61fea5f-4340-5b18-9080-f2e25951ff63",
-      "name": "Have a number?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        1300,
-        1220
+        620,
+        560
       ]
     },
     {
@@ -774,7 +298,7 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Log"
+          "value": "Days"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -784,8 +308,11 @@
             "weekday": "={{ $json.weekday }}",
             "name": "={{ $json.name }}",
             "phone": "={{ $json.phone }}",
-            "target": "={{ $json.target }}",
+            "focus": "={{ $json.focus }}",
+            "calls_target": "={{ $json.calls_target }}",
             "calls": "={{ $json.calls }}",
+            "hours_cap": "={{ $json.hours_cap }}",
+            "hours": "={{ $json.hours }}",
             "status": "={{ $json.status }}",
             "note": "={{ $json.note }}",
             "raw_reply": "={{ $json.raw_reply }}",
@@ -802,13 +329,13 @@
           "cellFormat": "USER_ENTERED"
         }
       },
-      "id": "4bd29795-0aeb-5b27-a12b-af464fa638ad",
-      "name": "Record the answer",
+      "id": "b7e10015-0000-4000-8000-000000000015",
+      "name": "Record the day",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        1520,
-        1120
+        860,
+        460
       ]
     },
     {
@@ -816,125 +343,102 @@
         "resource": "message",
         "operation": "send",
         "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Have a number?').item.json.phone }}",
+        "recipientPhoneNumber": "={{ $('Did the regex read it?').item.json.phone }}",
         "messageType": "text",
-        "textBody": "=Logged {{ Number($('Have a number?').item.json.calls) }}/{{ $('Have a number?').item.json.target }} for {{ $('Have a number?').item.json.weekday }} {{ $('Have a number?').item.json.date }}. {{ Number($('Have a number?').item.json.calls) >= Number($('Have a number?').item.json.target) ? 'Target hit.' : (Number($('Have a number?').item.json.target) - Number($('Have a number?').item.json.calls)) + ' short of target.' }}"
+        "textBody": "=Logged {{ $('Did the regex read it?').item.json.calls }}/{{ $('Did the regex read it?').item.json.calls_target }} calls{{ $('Did the regex read it?').item.json.hours === '' ? '' : ', ' + $('Did the regex read it?').item.json.hours + 'h of ' + $('Did the regex read it?').item.json.hours_cap + 'h' }}. {{ Number($('Did the regex read it?').item.json.calls) >= Number($('Did the regex read it?').item.json.calls_target) ? 'Target hit.' : (Number($('Did the regex read it?').item.json.calls_target) - Number($('Did the regex read it?').item.json.calls)) + ' short.' }}"
       },
-      "id": "33bdc2ce-f5d1-5593-8138-1685174a64f0",
+      "id": "b7e10016-0000-4000-8000-000000000016",
       "name": "Confirm it landed",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
       "position": [
-        1740,
-        1120
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+        1080,
+        460
+      ]
     },
     {
       "parameters": {
-        "resource": "message",
-        "operation": "send",
-        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Match rep & parse reply').item.json.phone }}",
-        "messageType": "text",
-        "textBody": "=Sorry, I couldn't read a number out of that. How many sales calls did you get done today? Just the number is fine (0-{{ $('Match rep & parse reply').item.json.target }})."
-      },
-      "id": "3ec3e33f-4956-5d76-979a-457f557de567",
-      "name": "Ask for a plain number",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
-      "position": [
-        200,
-        1960
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "content": "## 3 · Graph it, Fridays at 17:00\nTwo surfaces, two jobs. The **Weekly** tab gets the per-day detail, so the client can pivot and chart it in the spreadsheet they already live in. WhatsApp gets a single progress-to-goal bar, which is the only shape that still reads on a phone as the roster grows.\n\nThe chart is a Chart.js config rendered by QuickChart — the same config drops into a web dashboard later without rewriting the aggregation.",
+        "content": "## 3 · Coach\nOne agent, two tools. It logs what the founder actually said and coaches from the Notion playbook library — and from nothing else. It cannot set a goal, move a target or quote a price that is not in a playbook row. If Anthropic is down the founder is asked for a plain number instead, which lane 2 can still log.",
+        "width": 1200,
         "height": 200,
-        "width": 1400,
-        "color": 4
+        "color": 6
       },
-      "id": "d6058bb0-8e4a-588d-84b4-0670477bf28f",
-      "name": "Lane 3 note",
+      "id": "b7e10017-0000-4000-8000-000000000017",
+      "name": "3 · Coach note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -280,
-        2460
+        760
       ]
     },
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "weeks",
-              "weeksInterval": 1,
-              "triggerAtDay": [
-                5
-              ],
-              "triggerAtHour": 17,
-              "triggerAtMinute": 0
-            }
-          ]
+        "promptType": "define",
+        "text": "=Founder: {{ $json.name }} ({{ $json.phone }})\nToday is {{ $json.weekday }} {{ $json.date }}. Today's goals: {{ $json.calls_target }} sales calls, under {{ $json.hours_cap }}h on them.\nTheir current focus metric: {{ $json.focus }}\nLog row key: {{ $json.key }}\n\nThey said: {{ $json.raw_reply }}",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "options": {
+          "systemMessage": "You are the Smart Scale OS coach, messaging a founder on WhatsApp. You have two jobs.\n\n1. Log the day. If the message says how many sales calls they held or how many hours they spent, call log_the_day with exactly those numbers. Never guess one they did not give — leave it out. Say what you logged.\n\n2. Coach. Use read_the_playbooks to find recovery tasks for their focus metric, and name at most one, with the playbook it comes from. Coach on behaviour, cadence and what to stop doing.\n\nHard limits. Never state a price, a policy, a target or a number that is not in the prompt or in a playbook row you just read. If they ask for one you do not have, say you do not have it and tell them to raise it with their mentor. Never set or change a goal — only their mentor does that.\n\nDoctrine: one focus at a time; removing the founder from the work beats adding effort; cadence beats intensity.\n\nReply in at most 60 words. No emoji, no greeting, no sign-off, no links, no bullet lists — plain sentences someone reads on a phone.",
+          "maxIterations": 6,
+          "enableStreaming": false
         }
       },
-      "id": "0030109e-674a-5167-b65f-3e6515e149a6",
-      "name": "Fridays 17:00",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.3,
+      "id": "b7e10018-0000-4000-8000-000000000018",
+      "name": "Smart Scale coach",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
       "position": [
-        -240,
-        2740
-      ]
+        860,
+        800
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
-        "documentId": {
+        "model": {
           "__rl": true,
-          "mode": "id",
-          "value": "REPLACE_WITH_SPREADSHEET_ID"
-        },
-        "sheetName": {
-          "__rl": true,
-          "mode": "name",
-          "value": "Log"
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
         },
         "options": {
-          "returnAllMatches": "returnAllMatches"
+          "maxTokensToSample": 1024,
+          "thinkingMode": "adaptive",
+          "effort": "low"
         }
       },
-      "id": "e6e0e5e9-a44a-5e7f-a1f0-94b68768358f",
-      "name": "Read the log",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "id": "b7e10019-0000-4000-8000-000000000019",
+      "name": "Claude",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
       "position": [
-        -20,
-        2740
+        700,
+        1020
       ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Every log row in, one row per rep for the current week out.\r\n//\r\n// \"asked\" and \"answered\" are counted separately on purpose: a silent day is\r\n// not a zero-call day, and a coach needs to see which one they are looking at.\r\nconst ZONE = 'Europe/Helsinki';\r\n\r\nconst now = $now.setZone(ZONE);\r\nconst weekStart = now.startOf('week');\r\nconst weekEnd = weekStart.plus({ days: 6 }).endOf('day');\r\nconst weekLabel = now.toFormat(\"kkkk-'W'WW\");\r\n\r\nconst DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];\r\n\r\nconst byRep = new Map();\r\n\r\nfor (const item of $input.all()) {\r\n  const row = item.json;\r\n\r\n  const date = DateTime.fromFormat(String(row.date ?? ''), 'yyyy-MM-dd', { zone: ZONE });\r\n  if (!date.isValid || date < weekStart || date > weekEnd) continue;\r\n\r\n  const phone = String(row.phone ?? '').replace(/\\D/g, '');\r\n  if (!phone) continue;\r\n\r\n  if (!byRep.has(phone)) {\r\n    byRep.set(phone, {\r\n      name: String(row.name ?? '').trim() || phone,\r\n      phone,\r\n      asked: 0,\r\n      answered: 0,\r\n      calls: 0,\r\n      target_total: 0,\r\n      hit_days: 0,\r\n      days: {},\r\n    });\r\n  }\r\n\r\n  const rep = byRep.get(phone);\r\n  const target = Number(row.target) || 0;\r\n\r\n  rep.asked += 1;\r\n  rep.target_total += target;\r\n\r\n  // An empty cell means the nudge went out and nothing came back.\r\n  const answer = row.calls;\r\n  const calls = answer === '' || answer === null || answer === undefined ? null : Number(answer);\r\n\r\n  if (calls !== null && Number.isFinite(calls)) {\r\n    rep.answered += 1;\r\n    rep.calls += calls;\r\n    if (target > 0 && calls >= target) rep.hit_days += 1;\r\n    rep.days[DAY_KEYS[date.weekday - 1]] = calls;\r\n  }\r\n}\r\n\r\nreturn [...byRep.values()]\r\n  .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name))\r\n  .map((rep) => ({\r\n    json: {\r\n      id: `${weekLabel}|${rep.phone}`,\r\n      week: weekLabel,\r\n      week_starting: weekStart.toFormat('yyyy-MM-dd'),\r\n      name: rep.name,\r\n      phone: rep.phone,\r\n      mon: rep.days.mon ?? '',\r\n      tue: rep.days.tue ?? '',\r\n      wed: rep.days.wed ?? '',\r\n      thu: rep.days.thu ?? '',\r\n      fri: rep.days.fri ?? '',\r\n      asked: rep.asked,\r\n      answered: rep.answered,\r\n      calls: rep.calls,\r\n      target_total: rep.target_total,\r\n      hit_days: rep.hit_days,\r\n      pct_of_target: rep.target_total > 0 ? Math.round((rep.calls / rep.target_total) * 100) : 0,\r\n    },\r\n  }));\r"
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.phone }}",
+        "contextWindowLength": 6
       },
-      "id": "dd671a69-9e9c-53ed-8741-07309af53f50",
-      "name": "Aggregate the week",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "b7e10020-0000-4000-8000-000000000020",
+      "name": "Remember the thread",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
       "position": [
-        200,
-        2740
+        860,
+        1020
       ]
     },
     {
       "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Write the founder's numbers for today into the log. Call this only when the message actually states how many sales calls they held, or how many hours they spent on them.",
         "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
@@ -944,30 +448,28 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Weekly"
+          "value": "Days"
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "id": "={{ $json.id }}",
-            "week": "={{ $json.week }}",
-            "week_starting": "={{ $json.week_starting }}",
+            "key": "={{ $json.key }}",
+            "date": "={{ $json.date }}",
+            "weekday": "={{ $json.weekday }}",
             "name": "={{ $json.name }}",
             "phone": "={{ $json.phone }}",
-            "mon": "={{ $json.mon }}",
-            "tue": "={{ $json.tue }}",
-            "wed": "={{ $json.wed }}",
-            "thu": "={{ $json.thu }}",
-            "fri": "={{ $json.fri }}",
-            "asked": "={{ $json.asked }}",
-            "answered": "={{ $json.answered }}",
-            "calls": "={{ $json.calls }}",
-            "target_total": "={{ $json.target_total }}",
-            "hit_days": "={{ $json.hit_days }}",
-            "pct_of_target": "={{ $json.pct_of_target }}"
+            "focus": "={{ $json.focus }}",
+            "calls_target": "={{ $json.calls_target }}",
+            "calls": "={{ $fromAI('calls', 'How many sales calls the founder says they held today. Omit if they did not say.', 'number') }}",
+            "hours_cap": "={{ $json.hours_cap }}",
+            "hours": "={{ $fromAI('hours', 'How many hours the founder says they spent on sales calls today. Omit if they did not say.', 'number') }}",
+            "status": "=logged",
+            "note": "={{ $fromAI('note', 'Why, in at most six words, for example \"two no-shows\" or \"delivery fire\". Empty if they gave no reason.', 'string') }}",
+            "raw_reply": "={{ $json.raw_reply }}",
+            "logged_at": "={{ $json.logged_at }}"
           },
           "matchingColumns": [
-            "id"
+            "key"
           ],
           "schema": [],
           "attemptToConvertTypes": false,
@@ -977,111 +479,19 @@
           "cellFormat": "USER_ENTERED"
         }
       },
-      "id": "412cb7f4-572f-574f-8230-2d21003a9710",
-      "name": "Write weekly totals",
-      "type": "n8n-nodes-base.googleSheets",
+      "id": "b7e10021-0000-4000-8000-000000000021",
+      "name": "log_the_day",
+      "type": "n8n-nodes-base.googleSheetsTool",
       "typeVersion": 4.7,
       "position": [
-        420,
-        2640
+        1020,
+        1020
       ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Weekly rows in, one Chart.js config plus a caption out.\r\n//\r\n// Form: a horizontal progress-to-goal bar, one row per rep — calls made, then\r\n// the remainder of the target as a recessive track. It is the only shape that\r\n// stays readable on a phone as the roster grows, and the bar length answers the\r\n// coach's actual question (\"who is short, and by how much\") without a second axis.\r\n// The per-day detail is not thrown away: it goes to the Weekly tab, where the\r\n// client can chart it themselves.\r\nconst reps = $input.all().map((item) => item.json);\r\nif (reps.length === 0) return [];\r\n\r\nconst CALLS_MADE = '#2a78d6';  // categorical slot 1\r\nconst TO_TARGET = '#cfd0cb';   // a track, not a series — deliberately recessive\r\nconst INK = '#52514e';\r\nconst INK_STRONG = '#0b0b0b';\r\nconst GRID = '#ececea';\r\n\r\nconst week = reps[0].week;\r\n\r\nconst chart = {\r\n  type: 'horizontalBar',\r\n  data: {\r\n    // The value rides in the axis label rather than inside the bar: a rep on 0 or\r\n    // 1 calls has no bar to write in, and that is exactly the rep you need to read.\r\n    labels: reps.map((rep) => [rep.name, `${rep.calls} of ${rep.target_total}`]),\r\n    datasets: [\r\n      {\r\n        label: 'Calls made',\r\n        backgroundColor: CALLS_MADE,\r\n        data: reps.map((rep) => rep.calls),\r\n        // A 2px surface-coloured edge reads as a gap between the segments.\r\n        borderColor: '#ffffff',\r\n        borderWidth: 2,\r\n        barPercentage: 0.62,\r\n        categoryPercentage: 0.8,\r\n      },\r\n      {\r\n        label: 'Still to target',\r\n        backgroundColor: TO_TARGET,\r\n        data: reps.map((rep) => Math.max(0, rep.target_total - rep.calls)),\r\n        borderColor: '#ffffff',\r\n        borderWidth: 2,\r\n        barPercentage: 0.62,\r\n        categoryPercentage: 0.8,\r\n      },\r\n    ],\r\n  },\r\n  options: {\r\n    responsive: false,\r\n    defaultFontColor: INK,\r\n    defaultFontSize: 13,\r\n    title: {\r\n      display: true,\r\n      text: `Sales calls vs. weekly target — ${week}`,\r\n      fontColor: INK_STRONG,\r\n      fontSize: 17,\r\n      padding: 16,\r\n    },\r\n    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } },\r\n    // QuickChart auto-registers chartjs-plugin-datalabels, which would print a\r\n    // number inside every segment. The values are already on the axis, and a\r\n    // rep on 0 calls has no segment to print into.\r\n    plugins: { datalabels: { display: false } },\r\n    layout: { padding: { left: 8, right: 24, top: 0, bottom: 8 } },\r\n    scales: {\r\n      xAxes: [{\r\n        stacked: true,\r\n        ticks: { beginAtZero: true, fontColor: INK },\r\n        gridLines: { color: GRID, zeroLineColor: GRID, drawBorder: false },\r\n        scaleLabel: { display: true, labelString: 'Calls', fontColor: INK },\r\n      }],\r\n      yAxes: [{\r\n        stacked: true,\r\n        ticks: { fontColor: INK_STRONG },\r\n        gridLines: { display: false, drawBorder: false },\r\n      }],\r\n    },\r\n  },\r\n};\r\n\r\nconst lines = reps.map((rep) => {\r\n  const silent = rep.asked - rep.answered;\r\n  const tail = silent > 0 ? `, ${silent} day${silent === 1 ? '' : 's'} silent` : '';\r\n  return `${rep.name}: ${rep.calls}/${rep.target_total} (${rep.pct_of_target}%) · hit target ${rep.hit_days}/${rep.asked} days${tail}`;\r\n});\r\n\r\nreturn [{\r\n  json: {\r\n    week,\r\n    chart,\r\n    height: 150 + reps.length * 58,\r\n    summary: `Sales calls — week ${week}\\n\\n${lines.join('\\n')}`,\r\n  },\r\n}];\r"
-      },
-      "id": "bf4fc388-9312-5679-a30b-42abf440fe87",
-      "name": "Build the chart",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        420,
-        2840
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://quickchart.io/chart/create",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chart: $json.chart, width: 820, height: $json.height, backgroundColor: 'white', devicePixelRatio: 2, format: 'png' }) }}",
-        "options": {}
-      },
-      "id": "55ae0866-2512-59ef-9064-356a5ac5ae6b",
-      "name": "Render the chart",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        640,
-        2840
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "resource": "message",
-        "operation": "send",
-        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "REPLACE_WITH_COACH_WHATSAPP_NUMBER",
-        "messageType": "image",
-        "mediaPath": "useMediaLink",
-        "mediaLink": "={{ $json.url }}",
-        "additionalFields": {
-          "mediaCaption": "={{ $('Build the chart').item.json.summary }}"
-        }
-      },
-      "id": "416e0dcf-484a-51fd-a5ce-eee7afaba6b5",
-      "name": "Send the chart to the coach",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
-      "position": [
-        860,
-        2840
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "0ddb293c-e490-5289-86d1-1a51093e58d3",
-              "leftValue": "={{ $('Match rep & parse reply').item.json.looks_like_question }}",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "rightValue": ""
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "7c28bc9b-8816-5919-b192-01aeea9af0f8",
-      "name": "Is it a question?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        -20,
-        1740
-      ]
-    },
-    {
-      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Read the Smart Scale OS playbook library: every recovery task, which metric and pillar it belongs to, its priority, the playbook it comes from and how long it takes. Takes no arguments.",
         "resource": "databasePage",
         "operation": "getAll",
         "dataSourceId": {
@@ -1094,114 +504,40 @@
         "simple": true,
         "options": {}
       },
-      "id": "f11e1bf1-c174-5647-8ca0-4efc687f2f76",
-      "name": "Read the handbook",
-      "type": "n8n-nodes-base.notion",
+      "id": "b7e10022-0000-4000-8000-000000000022",
+      "name": "read_the_playbooks",
+      "type": "n8n-nodes-base.notionTool",
       "typeVersion": 3,
       "position": [
-        200,
-        1740
+        1180,
+        1020
       ],
-      "executeOnce": true,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
       "onError": "continueRegularOutput",
       "alwaysOutputData": true
     },
     {
       "parameters": {
-        "jsCode": "// One output item per question a rep asked, carrying the handbook rows that\n// might answer it.\n//\n// Same shape as the reply parser: cheap path first. Word overlap against the\n// handbook is free and runs on every question; the model only ever sees the\n// three rows that scored, never the whole handbook. That keeps the prompt\n// small, keeps the answer anchored to something a human wrote, and means a\n// missing Anthropic credential still sends the top row verbatim.\nconst MAX_CANDIDATES = 3;\n\n// Below this the message is about something the handbook does not cover.\n// Two is one keyword hit, or two words shared with a question.\nconst MIN_SCORE = 2;\n\nconst WHATSAPP_LIMIT = 900;\n\n// Words that match everything and therefore mean nothing here.\nconst STOPWORDS = new Set([\n  'a', 'an', 'the', 'and', 'or', 'but', 'if', 'of', 'to', 'in', 'on', 'for', 'with', 'about',\n  'is', 'are', 'was', 'were', 'be', 'do', 'does', 'did', 'can', 'could', 'should', 'would',\n  'i', 'we', 'you', 'they', 'it', 'me', 'my', 'our', 'your', 'what', 'whats', 'how', 'why',\n  'when', 'where', 'which', 'who', 'this', 'that', 'there', 'here', 'any', 'some', 'get',\n  'ja', 'tai', 'jos', 'on', 'ei', 'se', 'mitä', 'mikä', 'miten', 'kuinka', 'miksi', 'milloin',\n  'missä', 'kuka', 'onko', 'voiko', 'voinko', 'saako', 'meidän', 'minun', 'kerro',\n]);\n\nfunction terms(text) {\n  return String(text ?? '')\n    .toLowerCase()\n    .split(/[^\\p{L}\\p{N}]+/u)\n    .filter((word) => word.length > 2 && !STOPWORDS.has(word));\n}\n\n// A Notion checkbox arrives as a real boolean; the same column imported from a\n// CSV arrives as the word. No column at all means nobody has retired anything.\nfunction isActive(value) {\n  if (value === undefined || value === null || value === '') return true;\n  if (typeof value === 'boolean') return value;\n  return ['true', 'yes', '1', 'x'].includes(String(value).trim().toLowerCase());\n}\n\n// The Notion node's simplified output names columns `property_<snake_case>`,\n// and the title column comes through as `name` as well.\nfunction row(json) {\n  const keywords = Array.isArray(json.property_keywords)\n    ? json.property_keywords.map((k) => String(k))\n    : String(json.property_keywords ?? '').split(',');\n\n  return {\n    question: String(json.property_question ?? json.name ?? '').trim(),\n    answer: String(json.property_answer ?? '').trim(),\n    keywords: keywords.map((k) => k.trim()).filter(Boolean),\n    url: String(json.url ?? ''),\n    active: isActive(json.property_active),\n  };\n}\n\nfunction score(asked, entry) {\n  const wanted = new Set(asked);\n  if (!wanted.size) return 0;\n\n  let total = 0;\n\n  // A keyword is a phrasing someone chose on purpose, so it counts double.\n  for (const keyword of entry.keywords) {\n    for (const word of terms(keyword)) if (wanted.has(word)) total += 2;\n  }\n\n  for (const word of new Set(terms(entry.question))) if (wanted.has(word)) total += 1;\n\n  return total;\n}\n\n// The handbook arrives on this node's input; the questions come from the parse\n// node, the same way that one takes its messages from the trigger. A failed\n// Notion call lands here too, as an item with no question on it — scoring it\n// finds nothing and every rep gets the no-answer line, which is the point: the\n// lane degrades instead of going quiet.\nconst handbook = $input\n  .all()\n  .map((item) => row(item.json))\n  .filter((entry) => entry.question && entry.answer && entry.active);\n\nconst out = [];\n\nfor (const item of $('Match rep & parse reply').all()) {\n  if (!item.json.looks_like_question) continue;\n\n  const asked = terms(item.json.raw_reply);\n\n  const ranked = handbook\n    .map((entry) => ({ ...entry, score: score(asked, entry) }))\n    .filter((entry) => entry.score >= MIN_SCORE)\n    .sort((a, b) => b.score - a.score)\n    .slice(0, MAX_CANDIDATES);\n\n  const best = ranked[0];\n\n  out.push({\n    json: {\n      phone: item.json.phone,\n      name: item.json.name,\n      question: item.json.raw_reply,\n      matched: Boolean(best),\n      // What the model is allowed to answer from, and nothing else.\n      handbook: ranked\n        .map((entry, i) => `${i + 1}. Q: ${entry.question}\\n   A: ${entry.answer}`)\n        .join('\\n'),\n      // What goes out when the model is unavailable or there was no match.\n      fallback_answer: best\n        ? best.answer.slice(0, WHATSAPP_LIMIT)\n        : `I don't have an answer for that in the handbook. Ask your coach, and reply here with your call count whenever you're ready.`,\n      source: best ? best.url : '',\n      // Appended by the Set node below. Built here because an n8n expression\n      // cannot hold the separator without fighting the escaping.\n      source_suffix: best && best.url ? ` — ${best.url}` : '',\n      matched_question: best ? best.question : '',\n      handbook_size: handbook.length,\n    },\n  });\n}\n\nreturn out;"
-      },
-      "id": "f763054e-7f30-57f1-a5f8-60dcd7a9b20e",
-      "name": "Find the best answer",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        420,
-        1740
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "add7c77d-c20c-5dd9-acff-4ad291a0f4dc",
-              "leftValue": "={{ $json.matched }}",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "rightValue": ""
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "2630a332-07b0-5b43-90a5-ea803f38e439",
-      "name": "Anything relevant?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        640,
-        1740
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Rep: {{ $json.name }}\nThey asked: {{ $json.question }}\n\nHandbook entries:\n{{ $json.handbook }}\n\nWrite the reply.",
-        "messages": {
-          "messageValues": [
-            {
-              "type": "SystemMessagePromptTemplate",
-              "message": "You answer a sales rep's question on WhatsApp using only the handbook entries you are given. At most 45 words, no emoji, no greeting, no sign-off. Never state a price, policy or number that is not in the entries - if they do not cover what was asked, say so and point them at their coach. Do not include links. Reply with the message text only."
-            }
-          ]
-        }
-      },
-      "id": "813ee5d1-d7db-51d9-903c-e87c203764d2",
-      "name": "Answer from the handbook",
-      "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "typeVersion": 1.9,
-      "position": [
-        880,
-        1860
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
         "mode": "manual",
-        "includeOtherFields": false,
         "assignments": {
           "assignments": [
             {
-              "id": "170a46d1-8577-5aad-be16-1fe427ff87f0",
+              "id": "b7e10023-0000-4000-8000-000000000023",
               "name": "message",
-              "value": "={{ (($json.text || '').trim().replace(/^[\"']|[\"']$/g, '').slice(0, 900) || $('Find the best answer').item.json.fallback_answer) + $('Find the best answer').item.json.source_suffix }}",
+              "value": "={{ ($json.output || '').trim().replace(/^[\"']|[\"']$/g, '').slice(0, 900) || \"I couldn't read a number out of that. How many sales calls did you hold today? Just the number is fine.\" }}",
               "type": "string"
             }
           ]
         },
+        "includeOtherFields": false,
         "options": {}
       },
-      "id": "ae3a1e5b-a768-5ea7-ae75-c623fac8ee41",
-      "name": "Tidy the answer",
+      "id": "b7e10024-0000-4000-8000-000000000024",
+      "name": "Tidy the coach reply",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1120,
-        1740
+        1080,
+        800
       ]
     },
     {
@@ -1209,35 +545,33 @@
         "resource": "message",
         "operation": "send",
         "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Find the best answer').item.json.phone }}",
+        "recipientPhoneNumber": "={{ $('Match founder & parse reply').item.json.phone }}",
         "messageType": "text",
         "textBody": "={{ $json.message }}"
       },
-      "id": "2349fe1c-823e-57b4-8ae5-aca90e011ab7",
-      "name": "Send the answer",
+      "id": "b7e10025-0000-4000-8000-000000000025",
+      "name": "Send the coach reply",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
       "position": [
-        1340,
-        1740
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+        1300,
+        800
+      ]
     },
     {
       "parameters": {
-        "content": "## 2b · Answer the question, from Notion\nA reply that is not a number but looks like a question goes to the **handbook** — a Notion database of question, answer and keywords — instead of being met with *\"reply with a plain number\"*.\n\n**Why the rows come back whole.** Notion's search API matches page *titles* only, so asking it to find the answer does not work. The handbook is small, so the lane reads it and scores the rows in code; only the three that scored reach the model, and the model may answer from nothing else.\n\n**It degrades twice.** No Anthropic credential and the top row goes out verbatim. No Notion either and the rep is told to ask their coach — still an answer, and still asked for their number.",
-        "height": 200,
-        "width": 1760,
-        "color": 4
+        "content": "## TODO\nNot built, deliberately — this canvas is the daily loop only.\n\n- **Weekly scoring.** The four Smart Scale metrics (Close Rate, Net Profit, Founder Hours, Pipeline) against derived targets, in a Code node so the scoring stays deterministic.\n- **One-focus doctrine.** When several metrics fail, name one and queue the rest — the rule the mock enforces on the dashboard.\n- **Friday scorecard.** The metric cards as a chart, to the founder and their mentor.\n- **Chase the quiet.** A nudge for founders who never replied, respecting the WhatsApp 24-hour window.\n- **Evals.** Retrieval and groundedness on the coach reply, before any of the above.",
+        "width": 460,
+        "height": 620,
+        "color": 3
       },
-      "id": "aa25a9bf-1b8f-5f7b-bc81-94339dbf53a9",
-      "name": "Lane 2b note",
+      "id": "b7e10026-0000-4000-8000-000000000026",
+      "name": "TODO note",
       "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
       "position": [
-        -280,
-        1560
+        1560,
+        340
       ]
     }
   ],
@@ -1246,142 +580,40 @@
       "main": [
         [
           {
-            "node": "Get the roster",
+            "node": "Get the founders",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get the roster": {
+    "Get the founders": {
       "main": [
         [
           {
-            "node": "Pick today's reps",
+            "node": "Set today's goals",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Pick today's reps": {
+    "Set today's goals": {
       "main": [
         [
           {
-            "node": "Send today's goal",
+            "node": "Send the goals",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send today's goal": {
+    "Send the goals": {
       "main": [
         [
           {
-            "node": "Log the goal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Nudge at 16:30": {
-      "main": [
-        [
-          {
-            "node": "Read the log (nudge)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read the log (nudge)": {
-      "main": [
-        [
-          {
-            "node": "Who still owes a number",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Who still owes a number": {
-      "main": [
-        [
-          {
-            "node": "Can we message freely?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Can we message freely?": {
-      "main": [
-        [
-          {
-            "node": "Write the nudge",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Nudge by template",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Write the nudge": {
-      "main": [
-        [
-          {
-            "node": "Tidy the nudge",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Nudge by template",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Tidy the nudge": {
-      "main": [
-        [
-          {
-            "node": "Nudge in chat",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Nudge in chat": {
-      "main": [
-        [
-          {
-            "node": "Log the nudge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Nudge by template": {
-      "main": [
-        [
-          {
-            "node": "Log the nudge",
+            "node": "Log the goals",
             "type": "main",
             "index": 0
           }
@@ -1403,123 +635,54 @@
       "main": [
         [
           {
-            "node": "Get the roster (reply)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
-    },
-    "Get the roster (reply)": {
-      "main": [
-        [
-          {
-            "node": "Match rep & parse reply",
+            "node": "Get the founders (reply)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Match rep & parse reply": {
+    "Get the founders (reply)": {
       "main": [
         [
           {
-            "node": "Understood the reply?",
+            "node": "Match founder & parse reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Understood the reply?": {
+    "Match founder & parse reply": {
       "main": [
         [
           {
-            "node": "Have a number?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Read it with Claude",
+            "node": "Did the regex read it?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read it with Claude": {
+    "Did the regex read it?": {
       "main": [
         [
           {
-            "node": "Apply the model's answer",
+            "node": "Record the day",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Is it a question?",
+            "node": "Smart Scale coach",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Apply the model's answer": {
-      "main": [
-        [
-          {
-            "node": "Have a number?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Write the nudge",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Read it with Claude",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Answer from the handbook",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Have a number?": {
-      "main": [
-        [
-          {
-            "node": "Record the answer",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Is it a question?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Record the answer": {
+    "Record the day": {
       "main": [
         [
           {
@@ -1530,148 +693,74 @@
         ]
       ]
     },
-    "Fridays 17:00": {
+    "Smart Scale coach": {
       "main": [
         [
           {
-            "node": "Read the log",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read the log": {
-      "main": [
-        [
-          {
-            "node": "Aggregate the week",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Aggregate the week": {
-      "main": [
-        [
-          {
-            "node": "Write weekly totals",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Build the chart",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build the chart": {
-      "main": [
-        [
-          {
-            "node": "Render the chart",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Render the chart": {
-      "main": [
-        [
-          {
-            "node": "Send the chart to the coach",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is it a question?": {
-      "main": [
-        [
-          {
-            "node": "Read the handbook",
+            "node": "Tidy the coach reply",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Ask for a plain number",
+            "node": "Tidy the coach reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read the handbook": {
+    "Tidy the coach reply": {
       "main": [
         [
           {
-            "node": "Find the best answer",
+            "node": "Send the coach reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Find the best answer": {
-      "main": [
+    "Claude": {
+      "ai_languageModel": [
         [
           {
-            "node": "Anything relevant?",
-            "type": "main",
+            "node": "Smart Scale coach",
+            "type": "ai_languageModel",
             "index": 0
           }
         ]
       ]
     },
-    "Anything relevant?": {
-      "main": [
+    "Remember the thread": {
+      "ai_memory": [
         [
           {
-            "node": "Answer from the handbook",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Tidy the answer",
-            "type": "main",
+            "node": "Smart Scale coach",
+            "type": "ai_memory",
             "index": 0
           }
         ]
       ]
     },
-    "Answer from the handbook": {
-      "main": [
+    "log_the_day": {
+      "ai_tool": [
         [
           {
-            "node": "Tidy the answer",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Tidy the answer",
-            "type": "main",
+            "node": "Smart Scale coach",
+            "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "Tidy the answer": {
-      "main": [
+    "read_the_playbooks": {
+      "ai_tool": [
         [
           {
-            "node": "Send the answer",
-            "type": "main",
+            "node": "Smart Scale coach",
+            "type": "ai_tool",
             "index": 0
           }
         ]

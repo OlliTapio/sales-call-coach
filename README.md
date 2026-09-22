@@ -1,83 +1,71 @@
-# Sales call tracker — WhatsApp → Google Sheets → chart
+# Smart Scale OS™ — the daily loop, on WhatsApp
 
-An n8n workflow that gives a sales rep a daily call target on WhatsApp, chases
-the ones who go quiet, writes what they report to Google Sheets, answers the
-questions they ask back out of a Notion handbook, and sends the coach a chart on
-Friday.
+The [Smart Scale OS mock](https://smart-scale-os-mock.pages.dev) is an app a
+founder has to remember to open. This is the same mentoring loop with nothing to
+open: an n8n workflow that sets the day's commitment on WhatsApp in the morning,
+records what actually happened in the evening, and coaches in between.
 
-![Weekly chart sent to the coach: a horizontal progress-to-goal bar per rep, calls made against
-the weekly target](example-chart.png)
+Three things, deliberately. Set the goal, record the day, coach — the rest of
+the OS (weekly scoring, the one-focus doctrine, the scorecard) is listed as TODO
+on the canvas and is not built here.
 
-*Sample data. Note the last two rows — one call and none at all still read clearly, because the
-number is on the axis and not inside a bar that isn't there.*
-
-Import `workflow.json`, fill in four placeholders, done. Forty nodes across five
-lanes on one canvas, plus five sticky notes. Notion is optional — leave its
-placeholder alone and lane 2b tells reps to ask their coach, which is what the
-workflow did before the lane existed.
+Import `workflow.json`, fill in three placeholders, done. Nineteen nodes across
+three lanes on one canvas, plus four sticky notes.
 
 ## What it does
 
-**1 · Set the goal** — weekdays at 08:30 Europe/Helsinki. Reads the `Roster` tab,
-keeps the people marked active, and tells each one what today's target is. Nobody
-is asked anything yet; they report whenever suits them. The row goes to `Log`
-with `status = goal_set` and an **empty** `calls` cell.
+**1 · Goals** — weekdays at 08:30 Europe/Helsinki. Reads the `Founders` tab,
+keeps the people marked active, and sends each one two numbers and their focus
+metric. The numbers come off their row; nothing is generated. The day's row goes
+to `Days` with `status = goal_set` and **empty** `calls` and `hours` cells.
 
-**1b · Nudge the quiet ones** — 16:30. Reads `Log`, keeps today's rows whose
-`calls` cell is still empty, and reminds only those people. Anyone who already
-reported hears nothing. Inside WhatsApp's 24-hour window Claude writes the nudge
-from the rep's last seven days; outside it, where free text is not allowed, the
-same nudge goes as an approved template.
+**2 · Check-in** — the WhatsApp Trigger fires on the reply. `6`, `6/3`, `all`
+and `none` are read by a regex, written straight to the sheet, and confirmed in
+one line. No model is involved, and no model *can* be: **Record the day** has
+exactly one node feeding it, and it is the IF.
 
-**2 · Collect** — the WhatsApp Trigger fires on the reply. `6`, `6/8`, `all` and
-`none` are parsed in code and cost nothing. Only the tail — *"did 6, two
-no-showed"* — goes to Claude. Either way the row is upserted onto the key the
-morning's goal created, and the rep gets a one-line confirmation.
-
-**2b · Answer** — a reply that is not a number and reads like a question goes to
-the handbook instead of being met with *"reply with a plain number"*. The lane
-reads a Notion database of question, answer and keywords, scores the rows
-against what was asked in code, and hands the best three to Claude to answer
-from — and from nothing else. No match, no Notion, or no Anthropic credential,
-and the rep still gets a reply.
-
-**3 · Graph** — Fridays at 17:00. Aggregates the week per rep into the `Weekly`
-tab (per-day columns, so the client can chart it in the spreadsheet they already
-live in) and renders a progress-to-goal bar that goes to the coach on WhatsApp.
-
-## The handbook
-
-One Notion database, four columns. `notion/Handbook.csv` is a starter — import it
-into Notion (*⋯ → Import → CSV*), or build the database by hand.
-
-| Column | Type | What it is |
-|---|---|---|
-| `Question` | Title | the question as someone would actually ask it |
-| `Answer` | Text | the reply, short enough to read on a phone |
-| `Keywords` | Multi-select | the other words reps use for the same thing |
-| `Active` | Checkbox | untick to retire a row without deleting it |
-
-`Keywords` is what makes the matching work — `Question` is only one phrasing of
-many, and a keyword counts double when a message is scored. A comma-separated
-text column works too, which is what a CSV import gives you before you convert
-it.
-
-A row with no answer written yet is skipped, so an empty one is a safe way to
-park a question somebody still has to answer.
+**3 · Coach** — everything the regex refused goes to one agent with two tools. It
+can write the founder's numbers into the log (`log_the_day`) and read the Notion
+playbook library (`read_the_playbooks`), and that is the whole of its reach. It
+answers, coaches, and names at most one recovery task. If Anthropic is down the
+founder is asked for a plain number instead — which lane 2 can still log.
 
 ## The spreadsheet
 
-One Google Sheet, three tabs. `sheets/*.csv` has the headers — import each one as
-a tab of the same name, or paste the header row in by hand.
+One Google Sheet, two tabs. `sheets/*.csv` has the headers and some sample rows —
+import each one as a tab of the same name, or paste the header row in by hand.
 
 | Tab | What it holds | You edit |
 |---|---|---|
-| `Roster` | `name`, `phone`, `daily_target`, `active` | yes — this is the only tab a human touches |
-| `Log` | one row per ask, upserted on `key` (`date` + `phone`) | no |
-| `Weekly` | per-rep weekly totals with `mon`–`fri` columns, upserted on `id` | no |
+| `Founders` | `name`, `phone`, `calls_target`, `hours_cap`, `focus`, `goal_text`, `active` | yes — the only tab a human touches |
+| `Days` | one row per founder per day, upserted on `key` (`date` + `phone`) | no |
 
 Phone numbers go in in international form without the `+` (`358401234567`); the
 workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
+`focus` is one of `close`, `profit`, `hours`, `pipe` — the four metrics the OS
+scores. An unrecognised value costs the founder their focus line and nothing
+else.
+
+## The playbook library
+
+One Notion database, eight columns. `notion/Playbooks.csv` is the library from
+the mock — import it into Notion (*⋯ → Import → CSV*), then point
+`read_the_playbooks` at it.
+
+| Column | Type | What it is |
+|---|---|---|
+| `Task` | Title | the recovery task, as the founder would be told to do it |
+| `Why` | Text | one line on what it fixes |
+| `Metric` | Select | `close`, `profit`, `hours` or `pipe` — matches the founder's focus |
+| `Pillar` | Select | Demand, Sales, Delivery or Operations |
+| `Priority` | Select | Urgent, High or Medium |
+| `Playbook` | Select | which playbook it comes from |
+| `Effort` | Text | how long it takes |
+| `Active` | Checkbox | untick to retire a task without deleting it |
+
+This database is the coach's entire world. It is read whole on each call — the
+library is a few dozen rows, and Notion's search endpoint matches page *titles*
+rather than their contents, so there is nothing to gain from querying it.
 
 ## Setup
 
@@ -92,188 +80,113 @@ workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
    than making a second copy.
 2. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
    WhatsApp Business Cloud (`whatsAppApi`) and WhatsApp Trigger
-   (`whatsAppTriggerApi`). Two are optional: Anthropic, for the model branches
-   (the nudge wording, the messy-reply parsing and the handbook answer), and
-   Notion, for lane 2b. A missing credential costs its own branch and nothing
-   else.
-3. **Replace four placeholders.** They are spelled exactly this way everywhere:
-   - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all eight Sheets nodes
-   - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all seven WhatsApp nodes
-   - `REPLACE_WITH_COACH_WHATSAPP_NUMBER` — who gets the Friday chart
-   - `REPLACE_WITH_NOTION_DATA_SOURCE_ID` — the handbook, on **Read the handbook**.
-     Easier from inside n8n: connect the Notion credential, open the node and
-     pick it from the *Data Source* list. Note that this is a **data source** id,
-     not the database id in the page URL — one database can hold several, and the
-     API has addressed them separately since its 2025-09-03 version. Share the
-     database with your integration first, or the list comes back empty.
-4. **Approve two message templates** in Meta Business Manager, both `en`,
-   category *Utility*, each with two body variables:
-
-   `daily_sales_goal` — sent every morning:
-
-   > Morning {{1}} — today's goal is {{2}} sales calls. Reply any time with how
-   > many you've done.
-
-   `daily_sales_nudge` — the end-of-day reminder, used whenever the rep is
-   outside the 24-hour window:
-
-   > Hi {{1}} — nothing logged for today yet. How many of your {{2}} calls did
-   > you get done?
-
-   Change the names in **Send today's goal** and **Nudge by template** if you
-   call yours something else; the format is `name|language`.
-5. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
+   (`whatsAppTriggerApi`). Two are optional: Anthropic and Notion, both for lane
+   3 only. Without them lanes 1 and 2 still set goals and log numbers.
+3. **Replace three placeholders.** They are spelled exactly this way everywhere:
+   - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all five Sheets nodes
+   - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all three WhatsApp nodes
+   - `REPLACE_WITH_NOTION_DATA_SOURCE_ID` — the playbook library, on
+     **read_the_playbooks**. Easier from inside n8n: connect the Notion
+     credential, open the node and pick it from the *Data Source* list. Note that
+     this is a **data source** id, not the database id in the page URL — one
+     database can hold several, and the API has addressed them separately since
+     its 2025-09-03 version. Share the database with your integration first, or
+     the list comes back empty.
+4. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
    nothing else can subscribe to the same app.
 
-To try it before wiring WhatsApp up: pin some `Roster` rows on **Get the roster**
-and run lane 1 manually.
+To try it before wiring WhatsApp up: pin some `Founders` rows on **Get the
+founders** and run lane 1 manually.
 
 ## Design notes
 
-Things here were decided deliberately, and most of them the hard way.
+**The regex owns the log; the agent owns the conversation.** On a normal evening
+a founder types `6` and a regex writes it. The agent only ever sees what the
+regex refused. That split is the point: the log is what the weekly scoring will
+be built on, so the number in it should not have a temperature. A structural test
+asserts that **Record the day** has exactly one upstream node.
+
+**The agent can fill in cells, not choose the row.** `log_the_day` takes `calls`,
+`hours` and `note` from `$fromAI()`; `key`, `date`, `phone` and both targets are
+expressions off the item. So the model can be wrong about a number the founder
+said, but it cannot write that number onto the wrong founder, the wrong day, or
+a target nobody set. It also cannot change a goal — only the `Founders` tab does
+that, and no node writes to it.
+
+**The coach's authority ends at the playbook library.** The system prompt forbids
+stating a price, a policy, a target or a number that is not in the prompt or in a
+row it just read, and tells it to hand anything else to the mentor. Grounding a
+coach persona is the whole difficulty: "be a business coach" is an invitation to
+invent a discount floor, and a founder will act on it.
 
 **A blank is not a zero.** Lane 1 writes the row when the goal goes out, so the
-report can tell "said zero" from "never answered" — and so lane 1b knows who to
-chase. `asked` and `answered` are counted separately all the way through, and a
-silent day leaves the day column empty rather than plotting a 0.
-
-**Only the quiet ones get chased.** The nudge is driven off that empty cell, not
-off a list of everyone. Report at 09:00 and you never hear from it again that
-day. Re-running the lane will not nudge the same person twice, because the row
-it writes back is marked `nudged` and the code skips those.
-
-**The 24-hour window decides the nudge, not preference.** WhatsApp allows
-free-form text only within 24 hours of the person's own last message; outside it
-a business-initiated message must be an approved template with fixed wording.
-**Who still owes a number** works out which case applies from the log's own reply
-timestamps, and the two send paths diverge on it. Claude writes the message on
-the open-window path, from the rep's last seven days — a rolling seven, not the
-calendar week, because on a Monday a calendar week holds nothing but today and
-every rep would be greeted as if they had just joined.
+log can tell "said zero" from "never answered". That distinction is what the
+weekly scoring will need, and it is free to preserve now.
 
 **One key, written twice.** `date|phone` is built in lane 1 and rebuilt from the
-inbound message in lane 2. Both writes are `appendOrUpdate` matching on it, so an
-answer lands on its own question's row and a re-run never duplicates. The weekly
-report does the same with `week|phone`.
+inbound message in lane 2. Every write is `appendOrUpdate` matching on it, so the
+evening's answer lands on the morning's row and a re-run never duplicates.
 
 **A reply after midnight belongs to yesterday.** Replies before 04:00 local are
-attributed to the previous day — otherwise the 00:30 answer creates a second row
+attributed to the previous day — otherwise the 00:30 answer opens a second row
 for a day nobody was asked about.
 
-**Notion cannot search its own pages for you.** The API's search endpoint matches
-page *titles*, not their contents, so "ask Notion for the answer" retrieves
-almost nothing useful. That is why the handbook is a small database read whole
-and scored here, rather than a pile of pages queried live. It keeps the prompt
-short as a side effect: the model sees three rows, never the handbook.
+**Memory is per founder.** The buffer is keyed on the phone number, not on a
+shared session, so the coach remembers the last few turns of *that* thread and
+nothing from anybody else's.
 
-**The handbook answers; the model only phrases it.** Scoring picks the row, and
-the model rewrites it for WhatsApp under instructions not to add a price, a
-policy or a number that is not in front of it. That ordering is what makes the
-degradation work — with no Anthropic credential the top row goes out verbatim,
-which is worse writing and exactly as correct.
-
-**A message is only a question once the number lane has given up.** The check
-runs after the extractor, so *"did 6, is the CRM down?"* is logged as six calls
-rather than swallowed by the handbook. It costs one extraction call on messages
-that were never going to hold a number, which is the cheaper of the two
-mistakes.
-
-**Cheap path first, model second.** A regex handles nearly every reply. The
-Information Extractor only sees what the regex refused, and it refuses on
-purpose: a bare number is trusted only when the message is essentially just that
-number, so *"tomorrow I'll do 8"* is not logged as eight calls today. Keeping
-the model on the tail also keeps the thing debuggable — most executions never
-touch it.
-
-**Every model branch degrades, none of them drop.** **Read it with Claude**,
-**Write the nudge** and **Answer from the handbook** are all set to *continue
-using error output*. No Anthropic credential, rate limit, bad day — the rep gets
-"reply with a plain number", the template nudge, or the handbook row as someone
-wrote it, instead of silence. **Read the handbook** continues on error as well,
-so a Notion outage produces "ask your coach" rather than a lane that stops
-halfway. The workflow is useful with the AI nodes disconnected entirely; it just
-asks again more often and sounds more robotic. One **Claude** node backs all
-three steps, so there is a single place to change model or effort.
-
-**Two surfaces, two jobs.** The per-day detail goes to the spreadsheet, where a
-client can pivot it however they like. WhatsApp gets one progress-to-goal bar per
-rep, because that is what survives being looked at on a phone. The value sits in
-the axis label rather than inside the bar — a rep on zero calls has no bar to
-write in, and that is precisely the rep you need to read.
-
-**The chart is a Chart.js config, not an image.** QuickChart renders it, but the
-same config drops into a web dashboard later without touching the aggregation.
-
-**WhatsApp's rules shaped the flow, not the other way round.** Business-initiated
-messages outside the 24-hour customer service window must be approved templates,
-which is why lane 1 sends a template and lane 2 — answering inside the window the
-rep just opened — sends free text. The Friday chart assumes the coach has
-messaged recently; if yours hasn't, that one needs a template with a media header
-too.
-
-**Small hygiene.** The trigger subscribes to `messages` only and filters out
-status callbacks, so delivered/read receipts don't wake the workflow. The roster
-read in lane 2 is `executeOnce`, so two messages in one webhook delivery don't
-read it twice. Outbound calls retry three times.
+**The coach degrades instead of dropping.** The agent is set to *continue using
+error output*, and both outputs land on the same Set node. No Anthropic
+credential, rate limit, bad day — the founder gets "how many sales calls did you
+hold today?" rather than silence, and the regex lane logs their answer.
+**read_the_playbooks** continues on error too, so a Notion outage costs the
+citation and not the reply.
 
 ## Tests
 
-[![test](https://github.com/OlliTapio/sales_call_tracker/actions/workflows/test.yml/badge.svg)](https://github.com/OlliTapio/sales_call_tracker/actions/workflows/test.yml)
-
-The five Code nodes are the part most likely to be wrong, so they are checked.
-`code/*.js` holds their bodies verbatim, and the harness runs them the way n8n
-does — same globals, same return contract — so a file can be pasted straight into
-the editor.
+The Code nodes are the part most likely to be wrong, so they are checked. The
+harness runs each `code/*.js` file the way n8n runs it — the file is the function
+body, `$input` / `$now` / `DateTime` / `$()` are globals — so the same file is
+pasted into n8n unchanged.
 
 ```
 npm install
-npm test        # 96 checks
-node sync-code.mjs --check   # workflow.json still matches code/
+npm test        # 43 checks
+npm run sync    # write code/*.js into workflow.json after editing one
 ```
 
-`node sync-code.mjs` splices `code/*.js` back into `workflow.json` after you edit
-a node body outside n8n. The structural tests catch the failures that otherwise
-only appear after import: a connection to a renamed node, an expression pointing
-at a node that no longer exists, a credential exported by accident.
+`code/*.js` is the source of truth for the Code nodes; `npm test` fails if
+`workflow.json` has drifted from it. Twenty-three of the checks are structural:
+they read the exported JSON and catch what only shows up after you import and
+press Execute — a connection to a renamed node, an expression pointing at a node
+that no longer exists, a placeholder that shipped.
 
-Beyond what CI runs, lanes 1 to 3 have been checked against **n8n 2.35.7**: the
-workflow imports cleanly, every parameter name matches the node definitions
-shipped in `n8n-nodes-base` and `@n8n/n8n-nodes-langchain`, and those four Code
-node bodies were executed inside n8n's own runtime — not just the harness — with
-the same assertions passing there.
-
-Lane 2b has had the reading half of that only. Its parameter names were checked
-against the Notion node's source at the same tag — it is `typeVersion` 3, the
-one that addresses data sources rather than databases — but the lane has not
-been imported into a running n8n or executed there.
-
-Not yet exercised end to end: the live WhatsApp, Google Sheets and Notion calls,
-and the QuickChart render. Those need credentials — see *Design notes* above for
-the WhatsApp windowing rules that constrain them.
+What the tests do **not** cover: nothing here calls a model. Every check exercises
+the deterministic code around the agent and the shape of the canvas. The agent's
+own behaviour — whether it logs the right number, whether it stays inside the
+playbook library — has no evals yet, and that is the next thing worth building.
 
 ## What is deliberately not here
 
-No embeddings and no vector store behind the handbook. Word overlap across a few
-dozen curated rows is enough, and it is inspectable — you can see why a row was
-picked. Prose pages instead of a question-and-answer table is where that stops
-being true, and that version wants a nightly index rather than a live read.
+The **TODO** sticky on the canvas lists the rest of the OS:
 
-No writes back to Notion either: unanswered questions are not filed anywhere, so
-the gaps in the handbook are found by reading the executions.
+- **Weekly scoring.** The four metrics against derived targets, in a Code node so
+  the scoring stays deterministic — the mock derives the pipeline target from
+  revenue over a 35% close benchmark, and that arithmetic belongs in code.
+- **The one-focus doctrine.** When several metrics fail, name one and queue the
+  rest. The mock enforces this on the dashboard; here it is a line in the morning
+  message and nothing more.
+- **The Friday scorecard.** The metric cards as a chart, to the founder and their
+  mentor.
+- **Chasing the quiet.** A nudge for founders who never replied, respecting
+  WhatsApp's 24-hour free-text window.
+- **Evals.** Retrieval and groundedness on the coach reply — before any of the
+  above, because the above all trusts it.
 
-No retry-the-nudge-if-silent, no streaks or leaderboards, no per-rep timezones,
-no multi-coach routing. All are a node or two away; none of them are worth
-building before someone has used this for a fortnight.
+No embeddings and no vector store behind the playbook library. A few dozen
+curated rows read whole is enough, and it is inspectable — you can see exactly
+what the coach was given. Prose pages instead of a task table is where that stops
+being true.
 
-The model is `claude-opus-5` at low effort, which is far more than parsing
-"did 6, two no-shows" needs — swap it on the **Claude** node for something
-cheaper if the volume ever justifies caring.
-
-## Status and licence
-
-A reference implementation, not a maintained product — it exists to be read and
-copied from. Issues and forks are welcome; nothing here is promised to keep
-working against future n8n releases. Built against `n8n-nodes-base` 2.15 and
-`@n8n/n8n-nodes-langchain` 2.39.
-
-MIT, see [LICENSE](LICENSE).
+Built against `n8n-nodes-base` and `@n8n/n8n-nodes-langchain` 2.35.5, the versions
+shipped with n8n 2.35.7.

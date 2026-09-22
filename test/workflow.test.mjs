@@ -9,6 +9,7 @@ import { readWorkflow, drift } from '../sync-code.mjs';
 
 const wf = readWorkflow();
 const names = new Set(wf.nodes.map((n) => n.name));
+const byName = Object.fromEntries(wf.nodes.map((n) => [n.name, n]));
 
 test('code/ and workflow.json have not drifted apart', () => {
   assert.deepEqual(drift(), []);
@@ -40,7 +41,7 @@ test('every connection points at a node that exists', () => {
   }
 });
 
-test('every $(\'node\') expression names a node that exists', () => {
+test("every $('node') expression names a node that exists", () => {
   const refs = new Set([...JSON.stringify(wf).matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]));
   for (const ref of refs) assert.ok(names.has(ref), `expression references unknown node ${ref}`);
 });
@@ -77,117 +78,129 @@ test('expressions have balanced braces', () => {
   for (const node of wf.nodes) walk(node.parameters, node.name);
 });
 
-test('both templates the README documents are the ones the workflow sends', () => {
-  const sent = new Set(wf.nodes.map((n) => n.parameters.template).filter(Boolean));
-  assert.deepEqual([...sent].sort(), ['daily_sales_goal|en', 'daily_sales_nudge|en']);
+// ---------------------------------------------------------------------------
+// The split that the whole design rests on
+// ---------------------------------------------------------------------------
+
+test('the regex owns the log; the agent only sees what it could not read', () => {
+  const [read, unread] = wf.connections['Did the regex read it?'].main;
+  assert.deepEqual(read.map((t) => t.node), ['Record the day']);
+  assert.deepEqual(unread.map((t) => t.node), ['Smart Scale coach']);
 });
 
-test('the nudge falls back to a template when the model cannot write one', () => {
-  const chain = wf.nodes.find((n) => n.name === 'Write the nudge');
-  assert.equal(chain.onError, 'continueErrorOutput');
-  const [ok, err] = wf.connections['Write the nudge'].main;
-  assert.deepEqual(ok.map((c) => c.node), ['Tidy the nudge']);
-  assert.deepEqual(err.map((c) => c.node), ['Nudge by template'], 'error output must reach a sendable path');
+test('a plain number never reaches a model', () => {
+  // Record the day is fed by the IF and nothing else, so there is no path from
+  // the agent into the deterministic write.
+  const feeds = Object.entries(wf.connections)
+    .filter(([, kinds]) => (kinds.main ?? []).flat().some((t) => t.node === 'Record the day'))
+    .map(([src]) => src);
+  assert.deepEqual(feeds, ['Did the regex read it?']);
 });
 
-test('the closed-window branch of the nudge uses a template, not free text', () => {
-  const [open, closed] = wf.connections['Can we message freely?'].main;
-  assert.deepEqual(open.map((c) => c.node), ['Write the nudge']);
-  assert.deepEqual(closed.map((c) => c.node), ['Nudge by template']);
-  const tmpl = wf.nodes.find((n) => n.name === 'Nudge by template');
-  assert.equal(tmpl.parameters.operation, 'sendTemplate');
+test('every write to the Days tab upserts on the same key', () => {
+  for (const name of ['Log the goals', 'Record the day', 'log_the_day']) {
+    const node = byName[name];
+    assert.equal(node.parameters.operation, 'appendOrUpdate');
+    assert.deepEqual(node.parameters.columns.matchingColumns, ['key']);
+    assert.equal(node.parameters.sheetName.value, 'Days');
+  }
 });
 
-test('one model node backs all three AI steps', () => {
-  const targets = wf.connections['Claude'].ai_languageModel.flat().map((c) => c.node);
-  assert.deepEqual(targets.sort(), [
-    'Answer from the handbook', 'Read it with Claude', 'Write the nudge',
-  ]);
+test('the agent may fill in numbers but not the row it writes them to', () => {
+  // key, date, phone and the targets are expressions off the item; only the
+  // three cells the founder actually spoke about come from the model.
+  const columns = byName.log_the_day.parameters.columns.value;
+  const fromModel = Object.entries(columns)
+    .filter(([, v]) => String(v).includes('$fromAI'))
+    .map(([k]) => k)
+    .sort();
+  assert.deepEqual(fromModel, ['calls', 'hours', 'note']);
+  assert.match(columns.key, /^=\{\{ \$json\.key \}\}$/);
 });
 
-test('the model branch degrades instead of dropping the answer', () => {
-  const extractor = wf.nodes.find((n) => n.name === 'Read it with Claude');
-  assert.equal(extractor.onError, 'continueErrorOutput');
-  const [, errorBranch] = wf.connections['Read it with Claude'].main;
-  // Still answerable from the handbook even when the extractor is down.
-  assert.deepEqual(errorBranch.map((t) => t.node), ['Is it a question?']);
+// ---------------------------------------------------------------------------
+// The agent cluster
+// ---------------------------------------------------------------------------
+
+test('the agent has exactly one model, one memory and two tools', () => {
+  const attached = (kind) => Object.entries(wf.connections)
+    .filter(([, kinds]) => kind in kinds)
+    .filter(([, kinds]) => kinds[kind].flat().some((t) => t.node === 'Smart Scale coach'))
+    .map(([src]) => src)
+    .sort();
+
+  assert.deepEqual(attached('ai_languageModel'), ['Claude']);
+  assert.deepEqual(attached('ai_memory'), ['Remember the thread']);
+  assert.deepEqual(attached('ai_tool'), ['log_the_day', 'read_the_playbooks']);
 });
 
-test('the handbook is only consulted once the number lane has given up', () => {
-  const [number, rest] = wf.connections['Have a number?'].main;
-  assert.deepEqual(number.map((t) => t.node), ['Record the answer']);
-  assert.deepEqual(rest.map((t) => t.node), ['Is it a question?']);
-
-  const [question, neither] = wf.connections['Is it a question?'].main;
-  assert.deepEqual(question.map((t) => t.node), ['Read the handbook']);
-  assert.deepEqual(neither.map((t) => t.node), ['Ask for a plain number']);
+test('the tool node names are the names the system prompt calls', () => {
+  const prompt = byName['Smart Scale coach'].parameters.options.systemMessage;
+  for (const tool of ['log_the_day', 'read_the_playbooks']) {
+    assert.ok(names.has(tool), `no node named ${tool}`);
+    assert.match(prompt, new RegExp(tool), `the system prompt never mentions ${tool}`);
+  }
 });
 
-test('the handbook is read whole, once per delivery', () => {
-  const notion = wf.nodes.find((n) => n.name === 'Read the handbook');
+test('each founder gets their own memory, not a shared one', () => {
+  const memory = byName['Remember the thread'];
+  assert.equal(memory.parameters.sessionIdType, 'customKey');
+  assert.match(memory.parameters.sessionKey, /\$json\.phone/);
+});
+
+test('streaming is off, because nothing here is a chat trigger', () => {
+  assert.equal(byName['Smart Scale coach'].parameters.options.enableStreaming, false);
+});
+
+test('the agent degrades instead of dropping the reply', () => {
+  const agent = byName['Smart Scale coach'];
+  assert.equal(agent.onError, 'continueErrorOutput');
+  const [ok, err] = wf.connections['Smart Scale coach'].main;
+  assert.deepEqual(ok.map((t) => t.node), ['Tidy the coach reply']);
+  assert.deepEqual(err.map((t) => t.node), ['Tidy the coach reply'],
+    'the error output must reach a sendable path');
+});
+
+test('the fallback asks for the one thing the regex can still read', () => {
+  const set = byName['Tidy the coach reply'];
+  const [assignment] = set.parameters.assignments.assignments;
+  assert.match(assignment.value, /\$json\.output/);
+  assert.match(assignment.value, /how many sales calls/i);
+});
+
+test('the playbooks are read whole, and a Notion outage does not stop the coach', () => {
+  const notion = byName.read_the_playbooks;
   assert.equal(notion.parameters.resource, 'databasePage');
   assert.equal(notion.parameters.operation, 'getAll');
   assert.equal(notion.parameters.returnAll, true);
-  // Notion's search matches titles only, so the scoring happens in code here.
+  // Notion's search endpoint matches page titles only, so there is nothing to
+  // gain from a query here — the agent reads the library and picks.
   assert.equal(notion.parameters.filterType, 'none');
-  assert.equal(notion.executeOnce, true);
-});
-
-test('a Notion failure still reaches the matcher, so the rep gets a reply', () => {
-  const notion = wf.nodes.find((n) => n.name === 'Read the handbook');
   assert.equal(notion.onError, 'continueRegularOutput');
-  // An empty handbook returns no rows at all, which would end the lane here
-  // and leave the question unanswered rather than answered badly.
   assert.equal(notion.alwaysOutputData, true);
-  assert.deepEqual(
-    wf.connections['Read the handbook'].main[0].map((t) => t.node), ['Find the best answer']);
 });
 
-test('both outputs of the handbook model land on a sendable path', () => {
-  const chain = wf.nodes.find((n) => n.name === 'Answer from the handbook');
-  assert.equal(chain.onError, 'continueErrorOutput');
-  const [ok, err] = wf.connections['Answer from the handbook'].main;
-  assert.deepEqual(ok.map((t) => t.node), ['Tidy the answer']);
-  assert.deepEqual(err.map((t) => t.node), ['Tidy the answer']);
+// ---------------------------------------------------------------------------
+// Housekeeping
+// ---------------------------------------------------------------------------
 
-  // The no-match branch skips the model and joins the same Set node.
-  const [, noMatch] = wf.connections['Anything relevant?'].main;
-  assert.deepEqual(noMatch.map((t) => t.node), ['Tidy the answer']);
-});
-
-test('the roster is read once per reply, not once per message', () => {
-  const roster = wf.nodes.find((n) => n.name === 'Get the roster (reply)');
-  assert.equal(roster.executeOnce, true);
+test('the founder list is read once per reply, not once per message', () => {
+  assert.equal(byName['Get the founders (reply)'].executeOnce, true);
 });
 
 test('status-only webhooks do not wake the reply workflow', () => {
-  const trigger = wf.nodes.find((n) => n.name === 'WhatsApp Trigger');
+  const trigger = byName['WhatsApp Trigger'];
   assert.deepEqual(trigger.parameters.updates, ['messages']);
   assert.deepEqual(trigger.parameters.options.messageStatusUpdates, []);
 });
 
-test('every write to the Log tab upserts on the same key', () => {
-  for (const name of ['Log the goal', 'Log the nudge', 'Record the answer']) {
-    const node = wf.nodes.find((n) => n.name === name);
-    assert.equal(node.parameters.operation, 'appendOrUpdate');
-    assert.deepEqual(node.parameters.columns.matchingColumns, ['key']);
-    assert.equal(node.parameters.sheetName.value, 'Log');
-  }
-});
-
-test('the README quotes the right number of nodes per placeholder', () => {
-  const count = (type) => wf.nodes.filter((n) => n.type === type).length;
-  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, new RegExp(`on all eight Sheets nodes`));
-  assert.equal(count('n8n-nodes-base.googleSheets'), 8);
-  assert.match(readme, new RegExp(`on all seven WhatsApp nodes`));
-  assert.equal(count('n8n-nodes-base.whatsApp'), 7);
+test('no credentials are exported', () => {
+  assert.equal(JSON.stringify(wf).includes('"credentials"'), false);
 });
 
 test('every placeholder is spelled the way the README says', () => {
   const found = new Set([...JSON.stringify(wf).matchAll(/REPLACE_WITH_[A-Z_]+/g)].map((m) => m[0]));
   assert.deepEqual([...found].sort(), [
-    'REPLACE_WITH_COACH_WHATSAPP_NUMBER',
     'REPLACE_WITH_NOTION_DATA_SOURCE_ID',
     'REPLACE_WITH_PHONE_NUMBER_ID',
     'REPLACE_WITH_SPREADSHEET_ID',
@@ -196,15 +209,14 @@ test('every placeholder is spelled the way the README says', () => {
 
 test('the shape the README describes is the shape on the canvas', () => {
   const count = (type) => wf.nodes.filter((n) => n.type === type).length;
-  const sticky = count('n8n-nodes-base.stickyNote');
-  assert.equal(wf.nodes.length - sticky, 40, 'README says forty nodes');
-  assert.equal(sticky, 5, 'README says five sticky notes');
-  assert.equal(count('n8n-nodes-base.googleSheets'), 8, 'README says eight Sheets nodes');
-  assert.equal(count('n8n-nodes-base.whatsApp'), 7, 'README says seven WhatsApp nodes');
-});
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 
-test('no credentials were exported with the workflow', () => {
-  for (const node of wf.nodes) {
-    assert.equal(node.credentials, undefined, `${node.name} carries a credential reference`);
-  }
+  const stickies = count('n8n-nodes-base.stickyNote');
+  assert.equal(wf.nodes.length - stickies, 19, 'README says nineteen nodes');
+  assert.equal(stickies, 4, 'README says four sticky notes');
+
+  assert.match(readme, /on all five Sheets nodes/);
+  assert.equal(count('n8n-nodes-base.googleSheets') + count('n8n-nodes-base.googleSheetsTool'), 5);
+  assert.match(readme, /on all three WhatsApp nodes/);
+  assert.equal(count('n8n-nodes-base.whatsApp'), 3);
 });

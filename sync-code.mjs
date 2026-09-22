@@ -7,12 +7,8 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export const CODE_NODES = {
-  "Pick today's reps": 'pick-todays-reps.js',
-  'Who still owes a number': 'who-still-owes-a-number.js',
-  'Match rep & parse reply': 'match-rep-and-parse-reply.js',
-  'Find the best answer': 'find-the-best-answer.js',
-  'Aggregate the week': 'aggregate-the-week.js',
-  'Build the chart': 'build-the-chart.js',
+  "Set today's goals": 'set-todays-goals.js',
+  'Match founder & parse reply': 'match-founder-and-parse-reply.js',
 };
 
 const WORKFLOW = new URL('./workflow.json', import.meta.url);
