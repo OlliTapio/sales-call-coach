@@ -4,7 +4,7 @@ import { RUNNERS, at, type Json, type Runner } from '../support/n8n-sandbox.ts';
 const PEOPLE = [
   {
     name: 'Anna Virtanen',
-    phone: '+358401234567',
+    chat_id: ' 610044521 ',
     calls_target: 8,
     hours_cap: 2,
     focus: 'close rate',
@@ -12,7 +12,7 @@ const PEOPLE = [
   },
   {
     name: 'Mikko Laine',
-    phone: '358401234568',
+    chat_id: 610044522,
     calls_target: 5,
     hours_cap: 3,
     focus: 'founder hours',
@@ -22,31 +22,30 @@ const PEOPLE = [
 
 interface Inbound {
   readonly at?: string;
-  readonly type?: string;
-  readonly from?: string;
+  /** Photos and stickers arrive with no `text` at all, which is how lane 2 skips them. */
+  readonly text?: boolean;
+  readonly chatId?: number | string;
 }
 
 const inbound = (
   body: string,
-  { at: when = '2026-09-21T19:02:00', type = 'text', from = '358401234567' }: Inbound = {},
+  { at: when = '2026-09-21T19:02:00', text = true, chatId = 610044521 }: Inbound = {},
 ): Json => ({
-  contacts: [{ profile: { name: 'Anna' }, wa_id: from }],
-  messages: [
-    {
-      from,
-      id: 'wamid.TEST',
-      type,
-      timestamp: String(Math.floor(at(when).toSeconds())),
-      text: { body },
-    },
-  ],
+  update_id: 1,
+  message: {
+    message_id: 4242,
+    from: { id: chatId, is_bot: false, first_name: 'Anna' },
+    chat: { id: chatId, type: 'private' },
+    date: Math.floor(at(when).toSeconds()),
+    ...(text ? { text: body } : {}),
+  },
 });
 
 describe.each(RUNNERS)('Match person & parse reply (%s)', (_, run: Runner) => {
   const reply = (body: string, opts?: Inbound) =>
     run('Match person & parse reply', {
       items: PEOPLE,
-      nodes: { 'WhatsApp Trigger': [inbound(body, opts)] },
+      nodes: { 'Telegram Trigger': [inbound(body, opts)] },
       now: at('2026-09-21T19:02:00'),
     });
   const one = (body: string, opts?: Inbound) => reply(body, opts)[0];
@@ -80,7 +79,7 @@ describe.each(RUNNERS)('Match person & parse reply (%s)', (_, run: Runner) => {
   });
 
   test('the target comes from the person who sent it', () => {
-    expect(one('all', { from: '358401234568' })?.['calls']).toBe(5);
+    expect(one('all', { chatId: 610044522 })?.['calls']).toBe(5);
   });
 
   test.each([
@@ -133,11 +132,11 @@ describe.each(RUNNERS)('Match person & parse reply (%s)', (_, run: Runner) => {
   });
 
   test('a message from someone not being monitored is ignored', () => {
-    expect(reply('6', { from: '358409999999' })).toEqual([]);
+    expect(reply('6', { chatId: 610049999 })).toEqual([]);
   });
 
   test('non-text messages are ignored', () => {
-    expect(reply('6', { type: 'image' })).toEqual([]);
+    expect(reply('6', { text: false })).toEqual([]);
   });
 
   test('a reply after midnight belongs to the day that just ended', () => {
@@ -146,7 +145,7 @@ describe.each(RUNNERS)('Match person & parse reply (%s)', (_, run: Runner) => {
   });
 
   test('the key matches the one this morning minted', () => {
-    expect(one('6')?.['key']).toBe('2026-09-21|358401234567');
+    expect(one('6')?.['key']).toBe('2026-09-21|610044521');
   });
 
   test('the goals and the focus travel with the reply, for the coach prompt', () => {
@@ -157,9 +156,9 @@ describe.each(RUNNERS)('Match person & parse reply (%s)', (_, run: Runner) => {
     const rows = run('Match person & parse reply', {
       items: PEOPLE,
       nodes: {
-        'WhatsApp Trigger': [
-          { messages: [{ from: '358401234567', type: 'text', text: { body: '5' } }] },
-          { statuses: [] },
+        'Telegram Trigger': [
+          { message: { chat: { id: 610044521 }, text: '5' } },
+          { edited_message: { chat: { id: 610044521 }, text: '9' } },
         ],
       },
       now: at('2026-09-21T19:02:00'),

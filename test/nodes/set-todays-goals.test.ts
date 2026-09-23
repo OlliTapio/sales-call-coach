@@ -4,7 +4,7 @@ import { RUNNERS, at } from '../support/n8n-sandbox.ts';
 const PEOPLE = [
   {
     name: 'Anna Virtanen',
-    phone: '+358 40 123 4567',
+    chat_id: ' 610 044 521 ',
     calls_target: 8,
     hours_cap: 2,
     focus: 'close rate',
@@ -12,7 +12,7 @@ const PEOPLE = [
   },
   {
     name: 'Mikko Laine',
-    phone: '358401234568',
+    chat_id: 610044522,
     calls_target: 5,
     hours_cap: 3,
     focus: 'founder hours',
@@ -20,15 +20,15 @@ const PEOPLE = [
   },
   {
     name: 'Paused Person',
-    phone: '358401234569',
+    chat_id: 610044523,
     calls_target: 8,
     hours_cap: 2,
     focus: 'close rate',
     active: 'FALSE',
   },
   {
-    name: 'No Phone',
-    phone: '',
+    name: 'No Chat Id',
+    chat_id: '',
     calls_target: 8,
     hours_cap: 2,
     focus: 'close rate',
@@ -36,34 +36,34 @@ const PEOPLE = [
   },
   {
     name: 'No Focus',
-    phone: '358401234570',
+    chat_id: 610044524,
     calls_target: 10,
     hours_cap: 1,
     focus: '',
     active: 'yes',
   },
-  { name: '', phone: '358401234571', calls_target: 'x', hours_cap: '', focus: '  ', active: 'x' },
+  { name: '', chat_id: 610044525, calls_target: 'x', hours_cap: '', focus: '  ', active: 'x' },
 ];
 
 describe.each(RUNNERS)("Set today's goals (%s)", (_, run) => {
   const goals = run("Set today's goals", { items: PEOPLE, now: at('2026-09-21T08:30:00') });
   const message = (i: number): string => String(goals[i]?.['message']);
 
-  test('only active people who have a phone number', () => {
+  test('only active people who have a chat id', () => {
     expect(goals.map((g) => g['name'])).toEqual([
       'Anna Virtanen',
       'Mikko Laine',
       'No Focus',
-      '358401234571',
+      '610044525',
     ]);
   });
 
-  test('phone numbers are normalised to the bare digits WhatsApp reports', () => {
-    expect(goals[0]?.['phone']).toBe('358401234567');
+  test('chat ids are normalised to the bare digits Telegram reports', () => {
+    expect(goals[0]?.['chat_id']).toBe('610044521');
   });
 
-  test('the key is date|phone, and the reply lane rebuilds it', () => {
-    expect(goals[0]?.['key']).toBe('2026-09-21|358401234567');
+  test('the key is date|chat_id, and the reply lane rebuilds it', () => {
+    expect(goals[0]?.['key']).toBe('2026-09-21|610044521');
   });
 
   test('both numbers reach the message, addressed by first name', () => {
@@ -82,14 +82,35 @@ describe.each(RUNNERS)("Set today's goals (%s)", (_, run) => {
     expect(message(2)).toMatch(/10 calls/);
   });
 
-  test('a blank name falls back to the phone, and junk targets to zero', () => {
+  test('a blank name falls back to the chat id, and junk targets to zero', () => {
     expect(goals[3]).toMatchObject({
-      name: '358401234571',
+      name: '610044525',
       calls_target: 0,
       hours_cap: 0,
       focus: '',
     });
-    expect(message(3)).toMatch(/^Morning 358401234571\./);
+    expect(message(3)).toMatch(/^Morning 610044525\./);
+  });
+
+  test('markdown characters in sheet text cannot unbalance the message', () => {
+    const [row] = run("Set today's goals", {
+      items: [
+        {
+          name: 'A_B *C*',
+          chat_id: 610044521,
+          calls_target: 8,
+          hours_cap: 2,
+          focus: 'follow_up cadence*',
+          active: 'TRUE',
+        },
+      ],
+      now: at('2026-09-21T08:30:00'),
+    });
+    const text = String(row?.['message']);
+    // Only the four asterisks this view writes itself may survive.
+    expect((text.match(/[*]/g) ?? []).length).toBe(6);
+    expect(text).not.toMatch(/_/);
+    expect(text).toMatch(/Focus: \*followup cadence\*/);
   });
 
   test('the row is opened with empty cells, not zeroes', () => {

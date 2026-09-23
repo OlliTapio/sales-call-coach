@@ -3,17 +3,12 @@ import type { Workflow } from '../build/workflow-file.ts';
 import { expectations, same } from './expect.ts';
 import type { Rule } from './rule.ts';
 
-const PLACEHOLDERS = [
-  'REPLACE_WITH_NOTION_DATA_SOURCE_ID',
-  'REPLACE_WITH_PHONE_NUMBER_ID',
-  'REPLACE_WITH_SPREADSHEET_ID',
-];
+const PLACEHOLDERS = ['REPLACE_WITH_NOTION_DATA_SOURCE_ID', 'REPLACE_WITH_SPREADSHEET_ID'];
 
 /** Every node of these types must carry the placeholder, not a real id. */
 const PLACEHOLDER_BY_TYPE: readonly (readonly [string, string])[] = [
   ['n8n-nodes-base.googleSheets', 'REPLACE_WITH_SPREADSHEET_ID'],
   ['n8n-nodes-base.googleSheetsTool', 'REPLACE_WITH_SPREADSHEET_ID'],
-  ['n8n-nodes-base.whatsApp', 'REPLACE_WITH_PHONE_NUMBER_ID'],
   ['n8n-nodes-base.notion', 'REPLACE_WITH_NOTION_DATA_SOURCE_ID'],
   ['n8n-nodes-base.notionTool', 'REPLACE_WITH_NOTION_DATA_SOURCE_ID'],
 ];
@@ -116,7 +111,7 @@ const readmeCounts: Rule = {
       `${inWords(wf.nodes.length - sticky)} nodes`,
       `${inWords(sticky)} sticky notes`,
       `on all ${inWords(count(wf, 'n8n-nodes-base.googleSheets', 'n8n-nodes-base.googleSheetsTool'))} Sheets nodes`,
-      `on all ${inWords(count(wf, 'n8n-nodes-base.whatsApp'))} WhatsApp nodes`,
+      `${inWords(count(wf, 'n8n-nodes-base.telegram'))} Telegram nodes`,
       `The ${inWords(count(wf, 'n8n-nodes-base.code'))} Code nodes`,
     ];
     const readme = ctx.readme.toLowerCase();

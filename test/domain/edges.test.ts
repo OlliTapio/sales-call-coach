@@ -1,9 +1,9 @@
 import { DateTime } from 'luxon';
 import { describe, expect, test, vi } from 'vitest';
-import { parseInboundTexts } from '../../src/adapters/whatsapp.ts';
+import { parseInboundTexts } from '../../src/adapters/telegram.ts';
 import { parseCheckIn } from '../../src/domain/reply.ts';
 import { localNow } from '../../src/n8n/clock.ts';
-import { toNumberOrZero, toText } from '../../src/shared/coerce.ts';
+import { toChatId, toNumberOrZero, toText } from '../../src/shared/coerce.ts';
 import type { Instant } from '../../src/shared/time.ts';
 import { at } from '../support/n8n-sandbox.ts';
 
@@ -19,6 +19,12 @@ describe('coerce', () => {
   test('non-scalar cells read as empty text, booleans as their word', () => {
     expect(toText({ a: 1 })).toBe('');
     expect(toText(true)).toBe('true');
+  });
+
+  test('a negative chat id keeps its sign, because groups have them', () => {
+    expect(toChatId(' -100 123 4567 ')).toBe('-1001234567');
+    expect(toChatId(610044521)).toBe('610044521');
+    expect(toChatId('  ')).toBe(null);
   });
 
   test('blank and junk numbers read as zero', () => {
@@ -39,19 +45,17 @@ describe('parseCheckIn', () => {
 describe('parseInboundTexts', () => {
   const now = instant('2026-09-21T19:00:00');
 
-  test('junk entries, senders without a number and bodiless texts are handled', () => {
-    const texts = parseInboundTexts(
-      {
-        messages: [
-          null,
-          'x',
-          { type: 'text', from: '' },
-          { type: 'text', from: '1', timestamp: '-5' },
-        ],
-      },
-      now,
-    );
-    expect(texts).toEqual([{ id: '', phone: '1', body: '', receivedAt: now }]);
+  test('updates with no message, no text or no chat id yield nothing', () => {
+    expect(parseInboundTexts({}, now)).toEqual([]);
+    expect(parseInboundTexts({ message: 'x' }, now)).toEqual([]);
+    expect(parseInboundTexts({ message: { chat: { id: 1 } } }, now)).toEqual([]);
+    expect(parseInboundTexts({ message: { chat: {}, text: 'hi' } }, now)).toEqual([]);
+  });
+
+  test('a nonsense date falls back to now, and the body is trimmed', () => {
+    expect(
+      parseInboundTexts({ message: { chat: { id: 1 }, text: '  hi  ', date: -5 } }, now),
+    ).toEqual([{ id: '', chatId: '1', body: 'hi', receivedAt: now }]);
   });
 });
 

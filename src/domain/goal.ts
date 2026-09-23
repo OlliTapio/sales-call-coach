@@ -5,11 +5,11 @@ import type { DayRow, Person } from './model.ts';
 
 /** `calls` and `hours` stay empty, not 0, so tonight can tell "none" from silence. */
 export const goalRow = (person: Person, now: Instant): DayRow => ({
-  key: rowKey(now, person.phone),
+  key: rowKey(now, person.chatId),
   date: dateKey(now),
   weekday: weekdayLabel(now),
   name: person.name,
-  phone: person.phone,
+  chat_id: person.chatId,
   focus: person.focus,
   calls_target: person.callsTarget,
   calls: '',

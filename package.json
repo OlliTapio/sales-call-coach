@@ -2,7 +2,7 @@
   "name": "whatsapp-coach",
   "private": true,
   "type": "module",
-  "description": "n8n workflow: a daily coaching check-in on WhatsApp - set the goal, record the day, coach",
+  "description": "n8n workflow: a daily coaching check-in on Telegram - set the goal, record the day, coach",
   "scripts": {
     "test": "vitest run --coverage",
     "build": "node tools/build/build-nodes.ts",

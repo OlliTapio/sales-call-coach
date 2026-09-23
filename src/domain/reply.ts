@@ -60,11 +60,11 @@ const replyRow = (person: Person, message: InboundText): ReplyRow => {
   const result = parseCheckIn(message.body, person.callsTarget);
   const parsed = result.kind !== 'unparsed';
   return {
-    key: rowKey(day, person.phone),
+    key: rowKey(day, person.chatId),
     date: dateKey(day),
     weekday: weekdayLabel(day),
     name: person.name,
-    phone: person.phone,
+    chat_id: person.chatId,
     focus: person.focus,
     calls_target: person.callsTarget,
     calls: parsed ? result.calls : '',
@@ -79,14 +79,14 @@ const replyRow = (person: Person, message: InboundText): ReplyRow => {
   };
 };
 
-/** Messages from numbers nobody is monitoring are not ours to log. */
+/** Messages from chat ids nobody is monitoring are not ours to log. */
 export const replyRows = (
   people: readonly Person[],
   messages: readonly InboundText[],
 ): readonly ReplyRow[] => {
-  const byPhone = new Map(people.map((person) => [person.phone, person]));
+  const byChatId = new Map(people.map((person) => [person.chatId, person]));
   return messages.flatMap((message) => {
-    const person = byPhone.get(message.phone);
+    const person = byChatId.get(message.chatId);
     return person === undefined ? [] : [replyRow(person, message)];
   });
 };
