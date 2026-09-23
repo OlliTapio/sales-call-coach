@@ -19,7 +19,11 @@ export function readWorkflow() {
 }
 
 export function readCode(file) {
-  return fs.readFileSync(new URL(file, CODE), 'utf8').replace(/\n+$/, '');
+  // Normalise to LF. Git checks these files out as CRLF wherever
+  // `core.autocrlf` is on, and jsCode inside workflow.json is always LF — so
+  // without this the drift check fails on every Windows clone and passes on CI,
+  // which is the least useful way round for a check to be wrong.
+  return fs.readFileSync(new URL(file, CODE), 'utf8').replace(/\r\n/g, '\n').replace(/\n+$/, '');
 }
 
 export function drift() {

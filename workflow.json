@@ -149,7 +149,7 @@
     {
       "parameters": {
         "content": "## 2 · Check-in\nThe regex owns the log. \"6\", \"6/3\" and \"none\" are read here and written straight to the sheet — no model touches the number on a normal evening. Everything else is handed to the coach in lane 3.",
-        "width": 1200,
+        "width": 1100,
         "height": 180,
         "color": 5
       },
@@ -359,7 +359,7 @@
     {
       "parameters": {
         "content": "## 3 · Coach\nOne agent for everyone on the list. It logs what the person actually said and coaches from the Notion playbook library — and from nothing else. It cannot set a goal, move a target or quote a number that is not in a playbook row. If Anthropic is down the person is asked for a plain number instead, which lane 2 can still log.",
-        "width": 1200,
+        "width": 1100,
         "height": 200,
         "color": 6
       },
@@ -417,7 +417,7 @@
       "typeVersion": 1.6,
       "position": [
         700,
-        1020
+        1080
       ]
     },
     {
@@ -432,7 +432,7 @@
       "typeVersion": 1.4,
       "position": [
         860,
-        1020
+        1080
       ]
     },
     {
@@ -485,7 +485,7 @@
       "typeVersion": 4.7,
       "position": [
         1020,
-        1020
+        1080
       ]
     },
     {
@@ -510,7 +510,7 @@
       "typeVersion": 3,
       "position": [
         1180,
-        1020
+        1080
       ],
       "onError": "continueRegularOutput",
       "alwaysOutputData": true
@@ -576,9 +576,9 @@
     },
     {
       "parameters": {
-        "content": "## TODO\nNot built, deliberately — this canvas is the daily loop only.\n\n- **Weekly scoring.** Each focus against its target, in a Code node so the scoring stays deterministic.\n- **One focus at a time.** When several things are off target, name one and queue the rest.\n- **Friday scorecard.** The week as a chart, to the person and to whoever coaches them.\n- **Chase the quiet.** A nudge for anyone who never replied, respecting the WhatsApp 24-hour window.\n- **Evals.** Groundedness and logging accuracy on the coach reply, before any of the above.",
+        "content": "## TODO\nNot built, deliberately — this canvas is the daily loop only.\n\n- **Weekly scoring.** Each focus against its target, in a Code node so the scoring stays deterministic.\n- **One focus at a time.** When several things are off target, name one and queue the rest.\n- **Friday scorecard.** The week as a chart, to the person and to whoever coaches them.\n- **Chase the quiet.** A nudge for anyone who never replied, respecting the WhatsApp 24-hour window.\n- **Call them, don't only text (ElevenLabs).** A ringing phone is a different kind of interrupt from a message that sits unread all evening. An ElevenLabs voice agent could place the nudge as an outbound call and take the number by voice. It also sidesteps the WhatsApp 24-hour window, which governs WhatsApp messages and not calls — at the cost of needing explicit consent to ring someone, which the `People` sheet would have to record and honour.\n- **Evals.** Groundedness and logging accuracy on the coach reply, before any of the above.",
         "width": 460,
-        "height": 620,
+        "height": 800,
         "color": 7
       },
       "id": "b7e10027-0000-4000-8000-000000000027",
@@ -788,5 +788,35 @@
     "timezone": "Europe/Helsinki",
     "saveManualExecutions": true
   },
-  "pinData": {}
+  "pinData": {
+    "Get the people": [
+      {
+        "name": "Anna Virtanen",
+        "phone": 358401234567,
+        "calls_target": 8,
+        "hours_cap": 2,
+        "focus": "close rate",
+        "goal_text": "Build a sales engine that closes at 35%+ without me on the calls.",
+        "active": "TRUE"
+      },
+      {
+        "name": "Mikko Laine",
+        "phone": 358401234568,
+        "calls_target": 5,
+        "hours_cap": 3,
+        "focus": "founder hours",
+        "goal_text": "Get off delivery entirely by Q3 and hand the closing seat to Petri.",
+        "active": "TRUE"
+      },
+      {
+        "name": "Sofia Berg",
+        "phone": 358401234570,
+        "calls_target": 10,
+        "hours_cap": 1,
+        "focus": "net profit",
+        "goal_text": "Two hires funded by margin, not by revenue. Stop discounting to win logos.",
+        "active": "TRUE"
+      }
+    ]
+  }
 }

@@ -12,6 +12,15 @@ canvas and are not built here.
 Import `workflow.json`, fill in three placeholders, done. Nineteen nodes across
 three lanes on one canvas, plus five sticky notes.
 
+![The workflow on the n8n canvas: three lanes — goals, check-in, coach — with the
+agent's model, memory and two tools hanging below it, and sticky notes for the
+TODO list and the known defects](workflow.png)
+
+*Imported into n8n 2.35.7 with no credentials configured. The red triangles are
+the missing credentials; `Get the people` shows `3 items` because the sample rows
+are pinned, which is what makes the canvas explorable before you connect
+anything.*
+
 ## What it does
 
 **1 · Goals** — weekdays at 08:30 Europe/Helsinki. Reads the `People` tab, keeps
@@ -69,22 +78,69 @@ This database is the coach's entire world. It is read whole on each call — the
 library is a few dozen rows, and Notion's search endpoint matches page *titles*
 rather than their contents, so there is nothing to gain from querying it.
 
-## Setup
+## Run it locally
 
-1. **Import** `workflow.json` into n8n (*Workflows → Import from File*), or from
-   the command line:
+You do not need a Google account, a WhatsApp number or an API key to open this
+and look around. The commands below are the ones used to produce the screenshot
+above, on Windows with Node 24; they work the same on macOS and Linux.
 
+1. **Put n8n's data somewhere disposable**, so this never touches an n8n you
+   already use. Every later command needs this variable set, so set it in the
+   shell you are going to work in.
+
+   ```bash
+   export N8N_USER_FOLDER="$PWD/.n8n-local"      # PowerShell: $env:N8N_USER_FOLDER = "$PWD\.n8n-local"
+   mkdir -p "$N8N_USER_FOLDER"
    ```
-   n8n import:workflow --input=workflow.json
+
+2. **Import the workflow.** The first run downloads n8n and applies ~200
+   migrations, so give it a few minutes; later runs are quick.
+
+   ```bash
+   npx n8n@2.35.7 import:workflow --input=workflow.json
    ```
 
-   The file carries a fixed `id`, so a re-import updates the same workflow rather
-   than making a second copy.
-2. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
+   Expect `Successfully imported 1 workflow.` The `Failed to load Custom API
+   options for the node "n8n-nodes-base.confluence"` lines above it are n8n
+   loading its own node catalogue and have nothing to do with this workflow.
+
+   The file carries a fixed `id` (`whatsappCoach`), so a re-import updates the
+   same workflow rather than making a second copy — edit `workflow.json`, run
+   this again, refresh the browser.
+
+3. **Start it.**
+
+   ```bash
+   npx n8n@2.35.7 start
+   ```
+
+   Then open <http://localhost:5678/workflow/whatsappCoach>. On the very first
+   start n8n asks you to create an owner account; it is local to
+   `$N8N_USER_FOLDER`, so any email and a password with 8+ characters, a digit
+   and a capital will do. `N8N_USER_MANAGEMENT_DISABLED` no longer skips this
+   screen in 2.x.
+
+4. **Look at it without connecting anything.** The sample `People` rows are
+   pinned onto **Get the people**, so that node outputs three items with no
+   Google credential attached — open it and you can read them. Pin data applies
+   to manual executions only; a production run still reads the real sheet.
+
+To delete the whole thing afterwards, remove `.n8n-local`. It is gitignored.
+
+**What this does and does not prove.** The workflow imports, the canvas is valid,
+and the pinned rows flow. It does not execute end to end — every send and every
+write needs a real credential, and `n8n execute --id` refuses this workflow
+outright because it has no Execute Workflow Trigger. For the Code nodes, the test
+suite is the stronger check anyway: it runs each `code/*.js` file the way n8n runs
+it. See *Tests*.
+
+## Connecting it for real
+
+1. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
    WhatsApp Business Cloud (`whatsAppApi`) and WhatsApp Trigger
    (`whatsAppTriggerApi`). Two are optional: Anthropic and Notion, both for lane
    3 only. Without them lanes 1 and 2 still set goals and log numbers.
-3. **Replace three placeholders.** They are spelled exactly this way everywhere:
+2. **Replace three placeholders.** They are spelled exactly this way everywhere:
    - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all five Sheets nodes
    - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all three WhatsApp nodes
    - `REPLACE_WITH_NOTION_DATA_SOURCE_ID` — the playbook library, on
@@ -94,11 +150,18 @@ rather than their contents, so there is nothing to gain from querying it.
      database can hold several, and the API has addressed them separately since
      its 2025-09-03 version. Share the database with your integration first, or
      the list comes back empty.
+3. **Unpin `Get the people`** once the Sheets credential is on, or leave it —
+   pinned data is ignored by production executions either way. Unpinning just
+   stops manual runs from quietly using the samples.
 4. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
-   nothing else can subscribe to the same app.
+   nothing else can subscribe to the same app, and the webhook needs a public
+   URL — a tunnel in front of localhost, or `npx n8n@2.35.7 start --tunnel` for a
+   throwaway one.
 
-To try it before wiring WhatsApp up: pin some `People` rows on **Get the people**
-and run lane 1 manually.
+Meta's free WhatsApp test number sends to **five** pre-registered recipients, each
+confirming by code in the dashboard, with no business verification. That is the
+cheapest way to put this in front of someone; going past five needs a real
+business number and Meta review.
 
 ## Known defects
 
@@ -208,6 +271,12 @@ The **TODO** sticky on the canvas lists the rest:
   them.
 - **Chasing the quiet.** A nudge for anyone who never replied, respecting
   WhatsApp's 24-hour free-text window.
+- **Calling, not only texting.** A ringing phone is a different kind of interrupt
+  from a message that sits unread all evening. An [ElevenLabs](https://elevenlabs.io/docs/agents-platform/phone-numbers/outbound-calling)
+  voice agent could place the nudge as an outbound call and take the number by
+  voice. It also sidesteps the 24-hour window, which governs WhatsApp messages
+  and not phone calls — at the cost of needing explicit consent to ring someone,
+  which the `People` sheet would have to record and honour.
 - **Evals.** Groundedness and logging accuracy on the coach reply — before any of
   the above, because the above all trusts it.
 
