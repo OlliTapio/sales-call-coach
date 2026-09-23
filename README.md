@@ -9,7 +9,7 @@ One workflow, one agent, many people. Three things, deliberately — set the goa
 record the day, coach. Scoring, scorecards and nudges are listed as TODO on the
 canvas and are not built here.
 
-**The name says WhatsApp because it started there.** It moved over one
+**It started on WhatsApp.** It moved over one
 constraint: WhatsApp's free-text window closes 24 hours after someone's last
 message, and the person this workflow most needs to reach is the one who has not
 replied — which makes _Chasing the quiet_, on the TODO list below, unbuildable
@@ -25,10 +25,8 @@ three lanes on one canvas, plus five sticky notes.
 agent's model, memory and two tools hanging below it, and sticky notes for the
 TODO list and the known defects](workflow.png)
 
-_Imported into n8n 2.35.7 with no credentials configured. The red triangles are
-the missing credentials; `Get the people` shows `3 items` because the sample rows
-are pinned, which is what makes the canvas explorable before you connect
-anything._
+_On n8n 2.35.7 with Google Sheets and Telegram connected. The two red triangles
+are the lane 3 credentials, Gemini and Notion, which lanes 1 and 2 do not need._
 
 ## What it does
 
