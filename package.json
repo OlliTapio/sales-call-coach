@@ -1,8 +1,8 @@
 {
-  "name": "sales-call-tracker",
+  "name": "whatsapp-coach",
   "private": true,
   "type": "module",
-  "description": "n8n workflow: WhatsApp daily sales-call check-in -> Google Sheets -> weekly chart",
+  "description": "n8n workflow: a daily coaching check-in on WhatsApp - set the goal, record the day, coach",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
     "sync": "node sync-code.mjs"

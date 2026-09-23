@@ -1,0 +1,21 @@
+Task,Why,Focus,Pillar,Priority,Playbook,Effort,Active
+Record & review the last 10 sales calls,"Tag every objection and where deals stalled. Auto-transcribed from the call tool.",close rate,Sales,Urgent,Call Review,1 hr,TRUE
+Lock the closing script from the breakdown,"Use the objection matrix to finalise the script the closer runs every time.",close rate,Sales,Urgent,Sales System,45 min,TRUE
+Run 3 done-with-you call reviews,"Sit beside the recordings, not the live calls. Coach the gaps you tagged.",close rate,Sales,High,Call Review,3 x 45 min,TRUE
+Come off all closing calls by week 6,"Put it on the calendar and the scorecard. This is the real unlock.",close rate,Sales,High,Ops Playbook,15 min,TRUE
+Track close rate per closer,"Track it weekly so the gap can never hide again.",close rate,Sales,Medium,KPI Dashboard SOP,20 min,TRUE
+Audit the last 10 deals for margin leaks,"Tag every discount and delivery overrun.",net profit,Operations,Urgent,Ops Playbook,45 min,TRUE
+Set a no-discount floor price,"Lock a minimum the closer cannot go below without sign-off.",net profit,Operations,High,Sales System,30 min,TRUE
+Reprice or offboard the bottom-20% margin clients,"Find the clients costing the most hours per euro.",net profit,Delivery,High,Delivery Review,1 hr,TRUE
+Run a 14-day upsell to existing clients,"Lift profit without new acquisition cost.",net profit,Demand,Medium,Fast Cash Campaign,2 hrs,TRUE
+Put a weekly P&L review on the dashboard,"Make margin visible every Monday so it never drifts again.",net profit,Operations,Medium,KPI Dashboard SOP,20 min,TRUE
+Install weekly sales + delivery + ops meetings,"Three short standing meetings move decisions off your desk.",founder hours,Operations,Urgent,Ops Playbook,1 hr setup,TRUE
+Stand up the live KPI dashboard,"When the team sees the numbers, they stop asking you.",founder hours,Operations,Urgent,KPI Dashboard SOP,2 hrs,TRUE
+Map the top 10 recurring decisions to SOPs,"Turn repeated decisions into rules the team runs without you.",founder hours,Operations,High,Ops Playbook,2 hrs,TRUE
+Delegate one full decision area this week,"Pick one, hand it over completely, resist taking it back.",founder hours,Operations,High,Delegation Ladder,ongoing,TRUE
+Block a day out of the business,"Stress-test the new rhythm while you are unreachable.",founder hours,Operations,Medium,Delegation Ladder,1 day,TRUE
+Reinstate the 5x/week posting cadence,"Use the content calendar. Ten hooks are pre-loaded.",pipeline,Demand,Urgent,Demand Playbook,1 hr,TRUE
+Build a binary lead-qualification rubric,"Give the setter a yes/no rubric so leads stop routing back to you.",pipeline,Demand,High,Demand Playbook,40 min,TRUE
+Write the setter DM sequences,"Hand the setter ready-to-run outreach so they book without your input.",pipeline,Demand,High,Demand Playbook,30 min,TRUE
+Re-engage the dormant 90-day lead list,"Run a reactivation sequence to leads that never booked.",pipeline,Demand,Medium,Fast Cash Campaign,1 hr,TRUE
+Add a weekly pipeline review,"Track new qualified pipeline every Monday.",pipeline,Demand,Medium,KPI Dashboard SOP,15 min,TRUE
