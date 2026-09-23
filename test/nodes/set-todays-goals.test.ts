@@ -92,6 +92,27 @@ describe.each(RUNNERS)("Set today's goals (%s)", (_, run) => {
     expect(message(3)).toMatch(/^Morning 610044525\./);
   });
 
+  test('markdown characters in sheet text cannot unbalance the message', () => {
+    const [row] = run("Set today's goals", {
+      items: [
+        {
+          name: 'A_B *C*',
+          chat_id: 610044521,
+          calls_target: 8,
+          hours_cap: 2,
+          focus: 'follow_up cadence*',
+          active: 'TRUE',
+        },
+      ],
+      now: at('2026-09-21T08:30:00'),
+    });
+    const text = String(row?.['message']);
+    // Only the four asterisks this view writes itself may survive.
+    expect((text.match(/[*]/g) ?? []).length).toBe(6);
+    expect(text).not.toMatch(/_/);
+    expect(text).toMatch(/Focus: \*followup cadence\*/);
+  });
+
   test('the row is opened with empty cells, not zeroes', () => {
     expect(goals[0]).toMatchObject({ calls: '', hours: '', status: 'goal_set' });
   });

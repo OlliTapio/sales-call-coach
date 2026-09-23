@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { parseInboundTexts } from '../../src/adapters/telegram.ts';
 import { parseCheckIn } from '../../src/domain/reply.ts';
 import { localNow } from '../../src/n8n/clock.ts';
-import { toNumberOrZero, toText } from '../../src/shared/coerce.ts';
+import { toChatId, toNumberOrZero, toText } from '../../src/shared/coerce.ts';
 import type { Instant } from '../../src/shared/time.ts';
 import { at } from '../support/n8n-sandbox.ts';
 
@@ -19,6 +19,12 @@ describe('coerce', () => {
   test('non-scalar cells read as empty text, booleans as their word', () => {
     expect(toText({ a: 1 })).toBe('');
     expect(toText(true)).toBe('true');
+  });
+
+  test('a negative chat id keeps its sign, because groups have them', () => {
+    expect(toChatId(' -100 123 4567 ')).toBe('-1001234567');
+    expect(toChatId(610044521)).toBe('610044521');
+    expect(toChatId('  ')).toBe(null);
   });
 
   test('blank and junk numbers read as zero', () => {
