@@ -4,10 +4,53 @@
   "type": "module",
   "description": "n8n workflow: WhatsApp daily sales-call check-in -> Google Sheets -> weekly chart",
   "scripts": {
-    "test": "node --test \"test/*.test.mjs\"",
-    "sync": "node sync-code.mjs"
+    "test": "vitest run --coverage",
+    "build": "node tools/build/build-nodes.ts",
+    "typecheck": "tsc -p .",
+    "lint": "eslint --max-warnings=0 --cache .",
+    "lint:workflow": "node tools/workflow-lint/cli.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip",
+    "check:fast": "npm run typecheck && npm run lint && npm run lint:workflow && npm run build -- --check && vitest run",
+    "check": "npm run format:check && npm run typecheck && npm run lint && npm run lint:workflow && npm run build -- --check && npm test && npm run knip",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
-    "luxon": "^3.5.0"
+    "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
+    "@eslint/js": "10.0.1",
+    "@types/estree": "1.0.9",
+    "@types/luxon": "3.7.5",
+    "@types/node": "24.13.6",
+    "@vitest/coverage-v8": "5.0.1",
+    "esbuild": "0.28.2",
+    "eslint": "10.11.0",
+    "eslint-plugin-functional": "10.0.1",
+    "jiti": "2.7.0",
+    "knip": "6.38.0",
+    "lint-staged": "17.5.1",
+    "luxon": "^3.5.0",
+    "prettier": "3.9.9",
+    "simple-git-hooks": "2.14.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.1"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=24.2"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged && npm run -s build -- --check && npm run -s lint:workflow",
+    "pre-push": "npm run -s check"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "prettier --write",
+      "eslint --max-warnings=0"
+    ],
+    "*.{json,md,yml,yaml}": "prettier --write"
   }
 }

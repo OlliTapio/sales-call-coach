@@ -7,8 +7,8 @@ coach a chart on Friday.
 ![Weekly chart sent to the coach: a horizontal progress-to-goal bar per rep, calls made against
 the weekly target](example-chart.png)
 
-*Sample data. Note the last two rows — one call and none at all still read clearly, because the
-number is on the axis and not inside a bar that isn't there.*
+_Sample data. Note the last two rows — one call and none at all still read clearly, because the
+number is on the axis and not inside a bar that isn't there._
 
 Import `workflow.json`, fill in three placeholders, done. Thirty-three nodes
 across four lanes on one canvas, plus four sticky notes.
@@ -27,8 +27,8 @@ from the rep's last seven days; outside it, where free text is not allowed, the
 same nudge goes as an approved template.
 
 **2 · Collect** — the WhatsApp Trigger fires on the reply. `6`, `6/8`, `all` and
-`none` are parsed in code and cost nothing. Only the tail — *"did 6, two
-no-showed"* — goes to Claude. Either way the row is upserted onto the key the
+`none` are parsed in code and cost nothing. Only the tail — _"did 6, two
+no-showed"_ — goes to Claude. Either way the row is upserted onto the key the
 morning's goal created, and the rep gets a one-line confirmation.
 
 **3 · Graph** — Fridays at 17:00. Aggregates the week per rep into the `Weekly`
@@ -40,18 +40,18 @@ live in) and renders a progress-to-goal bar that goes to the coach on WhatsApp.
 One Google Sheet, three tabs. `sheets/*.csv` has the headers — import each one as
 a tab of the same name, or paste the header row in by hand.
 
-| Tab | What it holds | You edit |
-|---|---|---|
-| `Roster` | `name`, `phone`, `daily_target`, `active` | yes — this is the only tab a human touches |
-| `Log` | one row per ask, upserted on `key` (`date` + `phone`) | no |
-| `Weekly` | per-rep weekly totals with `mon`–`fri` columns, upserted on `id` | no |
+| Tab      | What it holds                                                    | You edit                                   |
+| -------- | ---------------------------------------------------------------- | ------------------------------------------ |
+| `Roster` | `name`, `phone`, `daily_target`, `active`                        | yes — this is the only tab a human touches |
+| `Log`    | one row per ask, upserted on `key` (`date` + `phone`)            | no                                         |
+| `Weekly` | per-rep weekly totals with `mon`–`fri` columns, upserted on `id` | no                                         |
 
 Phone numbers go in in international form without the `+` (`358401234567`); the
 workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
 
 ## Setup
 
-1. **Import** `workflow.json` into n8n (*Workflows → Import from File*), or from
+1. **Import** `workflow.json` into n8n (_Workflows → Import from File_), or from
    the command line:
 
    ```
@@ -60,6 +60,7 @@ workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
 
    The file carries a fixed `id`, so a re-import updates the same workflow rather
    than making a second copy.
+
 2. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
    WhatsApp Business Cloud (`whatsAppApi`) and WhatsApp Trigger
    (`whatsAppTriggerApi`). A fourth, Anthropic, is needed only if you want the
@@ -69,7 +70,7 @@ workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
    - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all six WhatsApp nodes
    - `REPLACE_WITH_COACH_WHATSAPP_NUMBER` — who gets the Friday chart
 4. **Approve two message templates** in Meta Business Manager, both `en`,
-   category *Utility*, each with two body variables:
+   category _Utility_, each with two body variables:
 
    `daily_sales_goal` — sent every morning:
 
@@ -84,6 +85,7 @@ workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
 
    Change the names in **Send today's goal** and **Nudge by template** if you
    call yours something else; the format is `name|language`.
+
 5. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
    nothing else can subscribe to the same app.
 
@@ -125,12 +127,12 @@ for a day nobody was asked about.
 **Cheap path first, model second.** A regex handles nearly every reply. The
 Information Extractor only sees what the regex refused, and it refuses on
 purpose: a bare number is trusted only when the message is essentially just that
-number, so *"tomorrow I'll do 8"* is not logged as eight calls today. Keeping
+number, so _"tomorrow I'll do 8"_ is not logged as eight calls today. Keeping
 the model on the tail also keeps the thing debuggable — most executions never
 touch it.
 
 **Both model branches degrade, they don't drop.** **Read it with Claude** and
-**Write the nudge** are set to *continue using error output*. No Anthropic
+**Write the nudge** are set to _continue using error output_. No Anthropic
 credential, rate limit, bad day — the rep gets "reply with a plain number", or
 the template nudge, instead of silence. The workflow is useful with the AI nodes
 disconnected entirely; it just asks again more often and sounds more robotic.
@@ -162,30 +164,34 @@ read it twice. Outbound calls retry three times.
 
 [![test](https://github.com/OlliTapio/sales_call_tracker/actions/workflows/test.yml/badge.svg)](https://github.com/OlliTapio/sales_call_tracker/actions/workflows/test.yml)
 
-The four Code nodes are the part most likely to be wrong, so they are checked.
-`code/*.js` holds their bodies verbatim, and the harness runs them the way n8n
-does — same globals, same return contract — so a file can be pasted straight into
-the editor.
+The five Code nodes are the part most likely to be wrong, so they are checked.
+Their bodies are written in strict TypeScript under `src/` and compiled into
+`workflow.json` by `npm run build`, as flat, readable JavaScript you can still paste
+straight into the editor. Every behaviour test runs twice, against the source and
+against the compiled body, with the same globals and return contract n8n uses.
 
 ```
 npm install
-npm test        # 52 checks
-node sync-code.mjs --check   # workflow.json still matches code/
+npm run check        # everything CI runs
+npm run build        # after editing src/, recompile the Code nodes into workflow.json
 ```
 
-`node sync-code.mjs` splices `code/*.js` back into `workflow.json` after you edit
-a node body outside n8n. The structural tests catch the failures that otherwise
-only appear after import: a connection to a renamed node, an expression pointing
-at a node that no longer exists, a credential exported by accident.
+`npm run lint:workflow` catches the failures that otherwise only appear after
+import: a connection to a renamed node, an expression pointing at a node that no
+longer exists, a credential exported by accident, an outbound node without
+retries. How the code is organised and which tool enforces which rule is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); agent instructions are in
+[AGENTS.md](AGENTS.md).
 
-Beyond what CI runs, this has been checked against **n8n 2.35.7**: the workflow
-imports cleanly, every parameter name matches the node definitions shipped in
-`n8n-nodes-base` and `@n8n/n8n-nodes-langchain`, and all four Code node bodies
-were executed inside n8n's own runtime — not just the harness — with the same
-assertions passing there.
+Beyond what CI runs, the workflow was checked against **n8n 2.35.7**: it imports
+cleanly, every parameter name matches the node definitions shipped in
+`n8n-nodes-base` and `@n8n/n8n-nodes-langchain`, and the earlier hand-written Code
+node bodies ran inside n8n's own runtime with the same assertions passing. The
+compiled bodies pass those same assertions in the harness, but have not yet been
+re-run inside n8n itself.
 
 Not yet exercised end to end: the live WhatsApp and Google Sheets calls, and the
-QuickChart render. Those need credentials — see *Design notes* above for the
+QuickChart render. Those need credentials — see _Design notes_ above for the
 WhatsApp windowing rules that constrain them.
 
 ## What is deliberately not here

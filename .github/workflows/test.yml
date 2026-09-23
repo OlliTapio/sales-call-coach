@@ -6,15 +6,14 @@ on:
   pull_request:
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm test
-      - name: workflow.json is in sync with code/
-        run: node sync-code.mjs --check
+      # Formatting, types, lint (layers, FP, comments), workflow lint, drift, tests + coverage, knip.
+      - run: npm run check
