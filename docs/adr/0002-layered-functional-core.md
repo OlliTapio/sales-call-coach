@@ -6,7 +6,7 @@ Date: 2026-09-23 · Status: accepted
 
 Each Code node mixed n8n I/O, business rules and presentation in one file. Most of the
 bugs this workflow can have are rule bugs: a blank read as zero, a reply after midnight
-put on the wrong day, a nudge sent twice. Those rules deserve to be pure and tested alone.
+put on the wrong day, a sentence read as a call count. Those rules deserve to be pure and tested alone.
 
 ## Decision
 

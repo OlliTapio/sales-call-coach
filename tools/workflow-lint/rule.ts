@@ -12,6 +12,8 @@ export interface LintContext {
   readonly readme: string;
   /** Node names allowed to break `expression-complexity`, each with the reason it is tolerated. */
   readonly complexExpressions: Readonly<Record<string, string>>;
+  /** Node names allowed to ship pinned data, each with the reason. */
+  readonly pinnedData: Readonly<Record<string, string>>;
 }
 
 export interface Rule {

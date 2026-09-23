@@ -1,237 +1,151 @@
-/** @file Invariants of this workflow in particular. Each one guards a decision in the README. */
+/** @file Invariants of this workflow's lanes and agent. Each guards a README design note. */
 import type { Workflow } from '../build/workflow-file.ts';
-import { byName, finding, targetsOf, type Finding, type Rule } from './rule.ts';
+import { expectations, same, setting } from './expect.ts';
+import { byName, type Rule } from './rule.ts';
 
-const same = (a: readonly string[], b: readonly string[]): boolean =>
-  JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+const DAYS_WRITES = ['Log the goals', 'Record the day', 'log_the_day'];
+const SPOKEN_CELLS = ['calls', 'hours', 'note'];
 
-const listOrNothing = (names: readonly string[]): string =>
-  names.length === 0 ? 'nothing' : names.join(', ');
+const feeders = (wf: Workflow, target: string): readonly string[] =>
+  Object.entries(wf.connections)
+    .filter(([, kinds]) => (kinds['main'] ?? []).flat().some((c) => c.node === target))
+    .map(([source]) => source);
 
-const expectations = (rule: string) => ({
-  targets: (
-    wf: Workflow,
-    node: string,
-    output: number,
-    want: readonly string[],
-  ): readonly Finding[] =>
-    same(targetsOf(wf, node, output), want)
-      ? []
-      : [
-          finding(
-            rule,
-            node,
-            `Output ${String(output)} must go to ${want.join(', ')}; it goes to ${listOrNothing(targetsOf(wf, node, output))}.`,
-          ),
-        ],
-  setting: (wf: Workflow, node: string, key: string, want: unknown): readonly Finding[] => {
-    const n = byName(wf, node);
-    const actual = n?.[key] ?? n?.parameters[key];
-    return JSON.stringify(actual) === JSON.stringify(want)
-      ? []
-      : [
-          finding(
-            rule,
-            node,
-            `${key} must be ${JSON.stringify(want)}; it is ${JSON.stringify(actual)}.`,
-          ),
-        ];
-  },
-});
+const attachedTo = (wf: Workflow, target: string, kind: string): readonly string[] =>
+  Object.entries(wf.connections)
+    .filter(([, kinds]) => (kinds[kind] ?? []).flat().some((c) => c.node === target))
+    .map(([source]) => source);
 
-const fallback = expectations('nudge-falls-back-to-template');
-const degrade = expectations('reply-parser-degrades');
-const hygiene = expectations('reply-lane-hygiene');
+const regex = expectations('regex-owns-the-log');
+const regexOwnsTheLog: Rule = {
+  id: 'regex-owns-the-log',
+  check: (wf) => [
+    ...regex.targets(wf, 'Did the regex read it?', 0, ['Record the day']),
+    ...regex.targets(wf, 'Did the regex read it?', 1, ['Coach']),
+    ...regex.that(
+      same(feeders(wf, 'Record the day'), ['Did the regex read it?']),
+      'Record the day',
+      'Only the IF may feed Record the day, so a plain number never reaches a model.',
+    ),
+  ],
+};
 
-const templates: Rule = {
-  id: 'templates-match-readme',
+const upsert = expectations('days-upserts-on-key');
+const daysUpsertsOnKey: Rule = {
+  id: 'days-upserts-on-key',
+  check: (wf) =>
+    DAYS_WRITES.flatMap((name) => [
+      ...upsert.setting(wf, name, 'operation', 'appendOrUpdate'),
+      ...upsert.setting(wf, name, 'columns.matchingColumns', ['key']),
+      ...upsert.setting(wf, name, 'sheetName.value', 'Days'),
+    ]),
+};
+
+const spoken = expectations('agent-writes-only-spoken-cells');
+const agentWritesOnlySpokenCells: Rule = {
+  id: 'agent-writes-only-spoken-cells',
   check: (wf) => {
-    const sent = [
-      ...new Set(
-        wf.nodes.map((n) => n.parameters['template']).filter((t) => typeof t === 'string'),
+    const columns = setting(wf, 'log_the_day', 'columns.value');
+    const entries = typeof columns === 'object' && columns !== null ? Object.entries(columns) : [];
+    const fromModel = entries.filter(([, v]) => String(v).includes('$fromAI')).map(([k]) => k);
+    return [
+      ...spoken.that(
+        same(fromModel, SPOKEN_CELLS),
+        'log_the_day',
+        `Only ${SPOKEN_CELLS.join(', ')} may come from $fromAI(); the row it lands on must not.`,
+      ),
+      ...spoken.setting(wf, 'log_the_day', 'columns.value.key', '={{ $json.key }}'),
+    ];
+  },
+};
+
+const cluster = expectations('agent-cluster');
+const agentCluster: Rule = {
+  id: 'agent-cluster',
+  check: (wf) => {
+    const prompt = String(setting(wf, 'Coach', 'options.systemMessage'));
+    const tools = attachedTo(wf, 'Coach', 'ai_tool');
+    return [
+      ...cluster.that(
+        same(attachedTo(wf, 'Coach', 'ai_languageModel'), ['Claude']),
+        'Coach',
+        'Coach needs exactly one model: Claude.',
+      ),
+      ...cluster.that(
+        same(attachedTo(wf, 'Coach', 'ai_memory'), ['Remember the thread']),
+        'Coach',
+        'Coach needs exactly one memory.',
+      ),
+      ...cluster.that(
+        same(tools, ['log_the_day', 'read_the_playbooks']),
+        'Coach',
+        'Coach has exactly two tools.',
+      ),
+      ...tools
+        .filter((tool) => !prompt.includes(tool))
+        .flatMap((tool) =>
+          cluster.that(false, 'Coach', `The system prompt never names the tool ${tool}.`),
+        ),
+      ...cluster.setting(wf, 'Remember the thread', 'sessionIdType', 'customKey'),
+      ...cluster.that(
+        String(setting(wf, 'Remember the thread', 'sessionKey')).includes('$json.phone'),
+        'Remember the thread',
+        'Memory must be keyed per person ($json.phone), not shared.',
+      ),
+      ...cluster.setting(wf, 'Coach', 'options.enableStreaming', false),
+    ];
+  },
+};
+
+const degrade = expectations('agent-degrades');
+const agentDegrades: Rule = {
+  id: 'agent-degrades',
+  check: (wf) => {
+    const fallback = JSON.stringify(
+      byName(wf, 'Tidy the coach reply')?.parameters['assignments'] ?? null,
+    );
+    return [
+      ...degrade.setting(wf, 'Coach', 'onError', 'continueErrorOutput'),
+      ...degrade.targets(wf, 'Coach', 0, ['Tidy the coach reply']),
+      ...degrade.targets(wf, 'Coach', 1, ['Tidy the coach reply']),
+      ...degrade.that(
+        fallback.includes('$json.output') && /how many calls/i.test(fallback),
+        'Tidy the coach reply',
+        'The fallback must use the agent output, else ask for the number the regex can read.',
       ),
     ];
-    return same(sent, ['daily_sales_goal|en', 'daily_sales_nudge|en'])
-      ? []
-      : [
-          finding(
-            'templates-match-readme',
-            null,
-            `Templates sent are ${sent.join(', ')}; the README documents daily_sales_goal and daily_sales_nudge.`,
-          ),
-        ];
   },
 };
 
-const nudgeFallsBack: Rule = {
-  id: 'nudge-falls-back-to-template',
+const playbooks = expectations('playbooks-read-whole');
+const playbooksReadWhole: Rule = {
+  id: 'playbooks-read-whole',
   check: (wf) => [
-    ...fallback.setting(wf, 'Write the nudge', 'onError', 'continueErrorOutput'),
-    ...fallback.targets(wf, 'Write the nudge', 0, ['Tidy the nudge']),
-    ...fallback.targets(wf, 'Write the nudge', 1, ['Nudge by template']),
-    ...fallback.targets(wf, 'Can we message freely?', 0, ['Write the nudge']),
-    ...fallback.targets(wf, 'Can we message freely?', 1, ['Nudge by template']),
-    ...fallback.setting(wf, 'Nudge by template', 'operation', 'sendTemplate'),
+    ...playbooks.setting(wf, 'read_the_playbooks', 'resource', 'databasePage'),
+    ...playbooks.setting(wf, 'read_the_playbooks', 'operation', 'getAll'),
+    ...playbooks.setting(wf, 'read_the_playbooks', 'returnAll', true),
+    ...playbooks.setting(wf, 'read_the_playbooks', 'filterType', 'none'),
+    ...playbooks.setting(wf, 'read_the_playbooks', 'onError', 'continueRegularOutput'),
+    ...playbooks.setting(wf, 'read_the_playbooks', 'alwaysOutputData', true),
   ],
 };
 
-const replyDegrades: Rule = {
-  id: 'reply-parser-degrades',
-  check: (wf) => [
-    ...degrade.setting(wf, 'Read it with Claude', 'onError', 'continueErrorOutput'),
-    ...degrade.targets(wf, 'Read it with Claude', 1, ['Ask for a plain number']),
-  ],
-};
-
-const oneModel: Rule = {
-  id: 'one-model-node',
-  check: (wf) => {
-    const targets = wf.connections['Claude']?.['ai_languageModel']?.flat().map((c) => c.node) ?? [];
-    return same(targets, ['Read it with Claude', 'Write the nudge'])
-      ? []
-      : [
-          finding(
-            'one-model-node',
-            'Claude',
-            'One Claude node must back both AI steps, so the model is changed in one place.',
-          ),
-        ];
-  },
-};
-
-const replyHygiene: Rule = {
+const hygiene = expectations('reply-lane-hygiene');
+const replyLaneHygiene: Rule = {
   id: 'reply-lane-hygiene',
   check: (wf) => [
-    ...hygiene.setting(wf, 'Get the roster (reply)', 'executeOnce', true),
+    ...hygiene.setting(wf, 'Get the people (reply)', 'executeOnce', true),
     ...hygiene.setting(wf, 'WhatsApp Trigger', 'updates', ['messages']),
-    ...(JSON.stringify(byName(wf, 'WhatsApp Trigger')?.parameters['options']) ===
-    JSON.stringify({ messageStatusUpdates: [] })
-      ? []
-      : [
-          finding(
-            'reply-lane-hygiene',
-            'WhatsApp Trigger',
-            'Status callbacks must be filtered out: options.messageStatusUpdates = [].',
-          ),
-        ]),
+    ...hygiene.setting(wf, 'WhatsApp Trigger', 'options.messageStatusUpdates', []),
   ],
-};
-
-const logUpserts: Rule = {
-  id: 'log-upserts-on-key',
-  check: (wf) =>
-    ['Log the goal', 'Log the nudge', 'Record the answer'].flatMap((name) => {
-      const p = byName(wf, name)?.parameters;
-      const ok =
-        p?.['operation'] === 'appendOrUpdate' &&
-        JSON.stringify(
-          (p['columns'] as { matchingColumns?: unknown } | undefined)?.matchingColumns,
-        ) === '["key"]' &&
-        (p['sheetName'] as { value?: unknown } | undefined)?.value === 'Log';
-      return ok
-        ? []
-        : [
-            finding(
-              'log-upserts-on-key',
-              name,
-              'Every write to Log must be appendOrUpdate on ["key"].',
-            ),
-          ];
-    }),
-};
-
-const PLACEHOLDERS = [
-  'REPLACE_WITH_COACH_WHATSAPP_NUMBER',
-  'REPLACE_WITH_PHONE_NUMBER_ID',
-  'REPLACE_WITH_SPREADSHEET_ID',
-];
-
-const placeholders: Rule = {
-  id: 'placeholders-match-readme',
-  check: (wf, ctx) => {
-    const found = [
-      ...new Set([...JSON.stringify(wf).matchAll(/REPLACE_WITH_[A-Z_]+/g)].map((m) => m[0])),
-    ];
-    return [
-      ...(same(found, PLACEHOLDERS)
-        ? []
-        : [
-            finding(
-              'placeholders-match-readme',
-              null,
-              `Placeholders are ${found.join(', ')}; expected ${PLACEHOLDERS.join(', ')}.`,
-            ),
-          ]),
-      ...PLACEHOLDERS.filter((p) => !ctx.readme.includes(p)).map((p) =>
-        finding('placeholders-match-readme', null, `README does not mention ${p}.`),
-      ),
-    ];
-  },
-};
-
-const ONES = [
-  'zero',
-  'one',
-  'two',
-  'three',
-  'four',
-  'five',
-  'six',
-  'seven',
-  'eight',
-  'nine',
-  'ten',
-  'eleven',
-  'twelve',
-  'thirteen',
-  'fourteen',
-  'fifteen',
-  'sixteen',
-  'seventeen',
-  'eighteen',
-  'nineteen',
-];
-const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
-
-/** English words for 0–99, the way the README spells counts ("thirty-three"). */
-export const inWords = (n: number): string => {
-  if (n < 20) return ONES[n] ?? String(n);
-  const tens = TENS[Math.floor(n / 10)];
-  if (n >= 100 || tens === undefined) return String(n);
-  return n % 10 === 0 ? tens : `${tens}-${ONES[n % 10] ?? ''}`;
-};
-
-const readmeCounts: Rule = {
-  id: 'readme-counts-match-canvas',
-  check: (wf, ctx) => {
-    const count = (type: string) => wf.nodes.filter((n) => n.type === type).length;
-    const sticky = count('n8n-nodes-base.stickyNote');
-    const claims = [
-      `${inWords(wf.nodes.length - sticky)} nodes`,
-      `${inWords(sticky)} sticky notes`,
-      `on all ${inWords(count('n8n-nodes-base.googleSheets'))} Sheets nodes`,
-      `on all ${inWords(count('n8n-nodes-base.whatsApp'))} WhatsApp nodes`,
-      `The ${inWords(count('n8n-nodes-base.code'))} Code nodes`,
-    ];
-    return claims
-      .filter((claim) => !ctx.readme.toLowerCase().includes(claim.toLowerCase()))
-      .map((claim) =>
-        finding(
-          'readme-counts-match-canvas',
-          null,
-          `README should say "${claim}"; update it to match the canvas.`,
-        ),
-      );
-  },
 };
 
 export const PROJECT_RULES: readonly Rule[] = [
-  templates,
-  nudgeFallsBack,
-  replyDegrades,
-  oneModel,
-  replyHygiene,
-  logUpserts,
-  placeholders,
-  readmeCounts,
+  regexOwnsTheLog,
+  daysUpsertsOnKey,
+  agentWritesOnlySpokenCells,
+  agentCluster,
+  agentDegrades,
+  playbooksReadWhole,
+  replyLaneHygiene,
 ];

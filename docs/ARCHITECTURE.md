@@ -1,7 +1,7 @@
 # Architecture
 
 The product is `workflow.json`, an n8n workflow. Most of it is n8n nodes on a canvas;
-five of those nodes are **Code nodes**, and their bodies are compiled from `src/`.
+two of those nodes are **Code nodes**, and their bodies are compiled from `src/`.
 Everything else in the repo exists to keep those two halves correct and in step.
 
 ```
@@ -21,9 +21,9 @@ src/nodes/      Controllers. One file per Code node, exporting main(). Reads
    ├─ src/n8n/      The n8n boundary: ambient global types, the Item shape, localNow().
    ├─ src/adapters/ Raw JSON (Sheets rows, WhatsApp webhooks) → domain types. Total
    │                functions: bad input becomes null or a default, never a throw.
-   ├─ src/views/    Presentation: Chart.js config, captions, prompt context lines.
-   └─ src/domain/   Business rules: goal rows, reply parsing, nudge windows, weekly
-         │          aggregation. Pure; time arrives as an Instant parameter.
+   ├─ src/views/    Presentation: the WhatsApp message text.
+   └─ src/domain/   Business rules: goal rows, the anchored check-in parser, day
+         │          keys and rollover. Pure; time arrives as an Instant parameter.
          └─ src/shared/  Config constants, coercions, branded Phone, collection helpers.
 ```
 
@@ -55,7 +55,7 @@ Also, for all of `src/`:
 | `workflow.json` Code nodes are build output, never hand-edited                 | `npm run build -- --check`, `code-nodes-are-generated`                                     |
 | Expressions map fields; logic lives in Code nodes                              | `expression-complexity` (listed exceptions carry reasons)                                  |
 | Outbound nodes retry; model nodes degrade to a fallback                        | `outbound-retries`, `ai-nodes-degrade`                                                     |
-| No credentials, pinned data, disabled nodes or hard-coded ids ship             | workflow lint                                                                              |
+| No credentials, unlisted pinned data, disabled nodes or hard-coded ids ship    | workflow lint                                                                              |
 | README claims match the canvas                                                 | `readme-counts-match-canvas`, `placeholders-match-readme`                                  |
 | Sheet rows match `sheets/*.csv` headers                                        | `test/nodes/sheet-contract.test.ts`                                                        |
 | No dead exports, files or dependencies                                         | knip                                                                                       |

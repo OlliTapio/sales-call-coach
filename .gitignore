@@ -1,4 +1,7 @@
 node_modules/
+.n8n-local/
+.playwright-cli/
 dist/
 coverage/
 .eslintcache
+*.local

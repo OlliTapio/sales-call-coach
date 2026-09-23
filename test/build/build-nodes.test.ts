@@ -15,8 +15,8 @@ describe('build', () => {
   });
 
   test('a body is self-contained and ends by returning the items', async () => {
-    const body = await bundleNode('pick-todays-reps');
-    expect(body).toMatch(/^\/\/ Generated from src\/nodes\/pick-todays-reps\.ts/);
+    const body = await bundleNode('set-todays-goals');
+    expect(body).toMatch(/^\/\/ Generated from src\/nodes\/set-todays-goals\.ts/);
     expect(body).toMatch(/\nreturn main\(\);$/);
     expect(body).not.toMatch(/\bimport\b|\brequire\(/);
   });
@@ -25,9 +25,9 @@ describe('build', () => {
     const workflow = readWorkflow();
     const without = {
       ...workflow,
-      nodes: workflow.nodes.filter((n) => n.name !== 'Build the chart'),
+      nodes: workflow.nodes.filter((n) => n.name !== 'Match person & parse reply'),
     };
-    await expect(buildWorkflow(without)).rejects.toThrow(/Build the chart/);
+    await expect(buildWorkflow(without)).rejects.toThrow(/Match person & parse reply/);
   });
 
   test('an entry that does not export main is refused', async () => {

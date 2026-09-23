@@ -17,16 +17,10 @@ export const toPhone = (value: unknown): Phone | null => {
   return digits === '' ? null : (digits as Phone);
 };
 
-/** An empty cell is "never answered", which is not the same as zero. */
-export const toCallsOrNull = (value: unknown): number | null => {
-  if (value === '' || value === null || value === undefined) return null;
+/** A blank or junk cell reads as 0, the way `Number(cell) || 0` did. */
+export const toNumberOrZero = (value: unknown): number => {
   const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
-
-export const toNonZeroOr = (value: unknown, fallback: number): number => {
-  const n = Number(value);
-  return Number.isFinite(n) && n !== 0 ? n : fallback;
+  return Number.isFinite(n) ? n : 0;
 };
 
 const ACTIVE_WORDS: readonly string[] = ['true', 'yes', '1', 'x'];

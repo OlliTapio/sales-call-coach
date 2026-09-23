@@ -1,9 +1,18 @@
 /**
  * @file PreToolUse(Edit|Write|MultiEdit): changes to the rules themselves need a human yes.
- * Loosening a lint rule or tsconfig flag is how guardrails quietly erode.
+ * A human can waive that for one session by putting its id in `.claude/policy-unlock.local`.
  */
-import { relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { projectDir, readInput, reply } from './lib.ts';
+
+const unlockedFor = (): string => {
+  try {
+    return readFileSync(join(projectDir(), '.claude', 'policy-unlock.local'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+};
 
 const POLICY_FILES = new Set([
   'tsconfig.json',
@@ -19,10 +28,12 @@ const POLICY_FILES = new Set([
 ]);
 const POLICY_DIRS = ['.claude/', '.github/', 'tools/eslint-rules/', 'tools/workflow-lint/'];
 
-const file = readInput().tool_input?.file_path ?? '';
-const path = relative(projectDir(), file).replaceAll('\\', '/');
+const input = readInput();
+const path = relative(projectDir(), input.tool_input?.file_path ?? '').replaceAll('\\', '/');
+const policy = POLICY_FILES.has(path) || POLICY_DIRS.some((dir) => path.startsWith(dir));
+const unlocked = input.session_id !== undefined && input.session_id === unlockedFor();
 
-if (POLICY_FILES.has(path) || POLICY_DIRS.some((dir) => path.startsWith(dir))) {
+if (policy && !unlocked) {
   reply({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',

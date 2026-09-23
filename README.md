@@ -1,174 +1,270 @@
-# Sales call tracker — WhatsApp → Google Sheets → chart
+# Coach — a daily check-in on WhatsApp
 
-An n8n workflow that gives a sales rep a daily call target on WhatsApp, chases
-the ones who go quiet, writes what they report to Google Sheets, and sends the
-coach a chart on Friday.
+An n8n workflow that coaches a group of people through WhatsApp. Every weekday
+morning it sends each person the two numbers they committed to and the one thing
+they are working on; in the evening it records what actually happened; and in
+between it answers whatever they send back.
 
-![Weekly chart sent to the coach: a horizontal progress-to-goal bar per rep, calls made against
-the weekly target](example-chart.png)
+One workflow, one agent, many people. Three things, deliberately — set the goal,
+record the day, coach. Scoring, scorecards and nudges are listed as TODO on the
+canvas and are not built here.
 
-_Sample data. Note the last two rows — one call and none at all still read clearly, because the
-number is on the axis and not inside a bar that isn't there._
+Import `workflow.json`, fill in three placeholders, done. Nineteen nodes across
+three lanes on one canvas, plus five sticky notes.
 
-Import `workflow.json`, fill in three placeholders, done. Thirty-three nodes
-across four lanes on one canvas, plus four sticky notes.
+![The workflow on the n8n canvas: three lanes — goals, check-in, coach — with the
+agent's model, memory and two tools hanging below it, and sticky notes for the
+TODO list and the known defects](workflow.png)
+
+_Imported into n8n 2.35.7 with no credentials configured. The red triangles are
+the missing credentials; `Get the people` shows `3 items` because the sample rows
+are pinned, which is what makes the canvas explorable before you connect
+anything._
 
 ## What it does
 
-**1 · Set the goal** — weekdays at 08:30 Europe/Helsinki. Reads the `Roster` tab,
-keeps the people marked active, and tells each one what today's target is. Nobody
-is asked anything yet; they report whenever suits them. The row goes to `Log`
-with `status = goal_set` and an **empty** `calls` cell.
+**1 · Goals** — weekdays at 08:30 Europe/Helsinki. Reads the `People` tab, keeps
+the rows marked active, and sends each person two numbers and their focus. The
+numbers come off their row; nothing is generated. The day's row goes to `Days`
+with `status = goal_set` and **empty** `calls` and `hours` cells.
 
-**1b · Nudge the quiet ones** — 16:30. Reads `Log`, keeps today's rows whose
-`calls` cell is still empty, and reminds only those people. Anyone who already
-reported hears nothing. Inside WhatsApp's 24-hour window Claude writes the nudge
-from the rep's last seven days; outside it, where free text is not allowed, the
-same nudge goes as an approved template.
+**2 · Check-in** — the WhatsApp Trigger fires on the reply. `6`, `6/3`, `all`
+and `none` are read by a regex, written straight to the sheet, and confirmed in
+one line. No model is involved, and no model _can_ be: **Record the day** has
+exactly one node feeding it, and it is the IF.
 
-**2 · Collect** — the WhatsApp Trigger fires on the reply. `6`, `6/8`, `all` and
-`none` are parsed in code and cost nothing. Only the tail — _"did 6, two
-no-showed"_ — goes to Claude. Either way the row is upserted onto the key the
-morning's goal created, and the rep gets a one-line confirmation.
-
-**3 · Graph** — Fridays at 17:00. Aggregates the week per rep into the `Weekly`
-tab (per-day columns, so the client can chart it in the spreadsheet they already
-live in) and renders a progress-to-goal bar that goes to the coach on WhatsApp.
+**3 · Coach** — everything the regex refused goes to one agent with two tools. It
+can write that person's numbers into the log (`log_the_day`) and read the Notion
+playbook library (`read_the_playbooks`), and that is the whole of its reach. It
+answers, coaches, and names at most one task to do next. If Anthropic is down the
+person is asked for a plain number instead — which lane 2 can still log.
 
 ## The spreadsheet
 
-One Google Sheet, three tabs. `sheets/*.csv` has the headers — import each one as
-a tab of the same name, or paste the header row in by hand.
+One Google Sheet, two tabs. `sheets/*.csv` has the headers and some sample rows —
+import each one as a tab of the same name, or paste the header row in by hand.
 
-| Tab      | What it holds                                                    | You edit                                   |
-| -------- | ---------------------------------------------------------------- | ------------------------------------------ |
-| `Roster` | `name`, `phone`, `daily_target`, `active`                        | yes — this is the only tab a human touches |
-| `Log`    | one row per ask, upserted on `key` (`date` + `phone`)            | no                                         |
-| `Weekly` | per-rep weekly totals with `mon`–`fri` columns, upserted on `id` | no                                         |
+| Tab      | What it holds                                                                | You edit                           |
+| -------- | ---------------------------------------------------------------------------- | ---------------------------------- |
+| `People` | `name`, `phone`, `calls_target`, `hours_cap`, `focus`, `goal_text`, `active` | yes — the only tab a human touches |
+| `Days`   | one row per person per day, upserted on `key` (`date` + `phone`)             | no                                 |
 
 Phone numbers go in in international form without the `+` (`358401234567`); the
 workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
 
-## Setup
+`focus` is free text. Nothing in the code interprets it — it is printed in the
+morning message and matched by the coach against the `Focus` column in the
+playbook library, so whoever owns the sheet decides what the focuses are. Leave
+it blank and the person still gets their numbers.
 
-1. **Import** `workflow.json` into n8n (_Workflows → Import from File_), or from
-   the command line:
+## The playbook library
 
+One Notion database, eight columns. `notion/Playbooks.csv` is a starter set —
+import it into Notion (_⋯ → Import → CSV_), then point `read_the_playbooks` at
+it.
+
+| Column     | Type     | What it is                                              |
+| ---------- | -------- | ------------------------------------------------------- |
+| `Task`     | Title    | the task, as you would tell someone to do it            |
+| `Why`      | Text     | one line on what it fixes                               |
+| `Focus`    | Select   | matches the `focus` on the person's row                 |
+| `Pillar`   | Select   | which part of the business it belongs to                |
+| `Priority` | Select   | Urgent, High or Medium                                  |
+| `Playbook` | Select   | where it comes from                                     |
+| `Effort`   | Text     | how long it takes                                       |
+| `Active`   | Checkbox | untick to retire a task — advisory, see _Known defects_ |
+
+This database is the coach's entire world. It is read whole on each call, because
+a few dozen rows cost less to hand over than to filter. That is a size argument,
+not a limitation: a Notion database query _can_ filter on `Focus`, and doing so
+is on the TODO note — the whole library goes into the model's context on every
+tool call today, which is linear in how big the library gets.
+
+## Run it locally
+
+You do not need a Google account, a WhatsApp number or an API key to open this
+and look around. The commands below are the ones used to produce the screenshot
+above, on Windows with Node 24; they work the same on macOS and Linux.
+
+1. **Put n8n's data somewhere disposable**, so this never touches an n8n you
+   already use. Every later command needs this variable set, so set it in the
+   shell you are going to work in.
+
+   ```bash
+   export N8N_USER_FOLDER="$PWD/.n8n-local"      # PowerShell: $env:N8N_USER_FOLDER = "$PWD\.n8n-local"
+   mkdir -p "$N8N_USER_FOLDER"
    ```
-   n8n import:workflow --input=workflow.json
+
+2. **Import the workflow.** The first run downloads n8n and applies ~200
+   migrations, so give it a few minutes; later runs are quick.
+
+   ```bash
+   npx n8n@2.35.7 import:workflow --input=workflow.json
    ```
 
-   The file carries a fixed `id`, so a re-import updates the same workflow rather
-   than making a second copy.
+   Expect `Successfully imported 1 workflow.` The `Failed to load Custom API
+options for the node "n8n-nodes-base.confluence"` lines above it are n8n
+   loading its own node catalogue and have nothing to do with this workflow.
 
-2. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
+   The file carries a fixed `id` (`whatsappCoach`), so a re-import updates the
+   same workflow rather than making a second copy — edit `workflow.json`, run
+   this again, refresh the browser.
+
+3. **Start it.**
+
+   ```bash
+   npx n8n@2.35.7 start
+   ```
+
+   Then open <http://localhost:5678/workflow/whatsappCoach>. On the very first
+   start n8n asks you to create an owner account; it is local to
+   `$N8N_USER_FOLDER`, so any email and a password with 8+ characters, a digit
+   and a capital will do. `N8N_USER_MANAGEMENT_DISABLED` no longer skips this
+   screen in 2.x.
+
+4. **Look at it without connecting anything.** The sample `People` rows are
+   pinned onto **Get the people**, so that node outputs three items with no
+   Google credential attached — open it and you can read them. Pin data applies
+   to manual executions only; a production run still reads the real sheet.
+
+To delete the whole thing afterwards, remove `.n8n-local`. It is gitignored.
+
+**What this does and does not prove.** The workflow imports, the canvas is valid,
+and the pinned rows flow. It does not execute end to end — every send and every
+write needs a real credential, and `n8n execute --id` refuses this workflow
+outright because it has no Execute Workflow Trigger. For the Code nodes, the test
+suite is the stronger check anyway: it runs each compiled Code-node body the way n8n runs
+it. See _Tests_.
+
+## Connecting it for real
+
+1. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
    WhatsApp Business Cloud (`whatsAppApi`) and WhatsApp Trigger
-   (`whatsAppTriggerApi`). A fourth, Anthropic, is needed only if you want the
-   model branches (the nudge wording and the messy-reply parsing).
-3. **Replace three placeholders.** They are spelled exactly this way everywhere:
-   - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all eight Sheets nodes
-   - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all six WhatsApp nodes
-   - `REPLACE_WITH_COACH_WHATSAPP_NUMBER` — who gets the Friday chart
-4. **Approve two message templates** in Meta Business Manager, both `en`,
-   category _Utility_, each with two body variables:
+   (`whatsAppTriggerApi`). Two are optional: Anthropic and Notion, both for lane
+   3 only. Without them lanes 1 and 2 still set goals and log numbers.
+2. **Replace three placeholders.** They are spelled exactly this way everywhere:
+   - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all five Sheets nodes
+   - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all three WhatsApp nodes
+   - `REPLACE_WITH_NOTION_DATA_SOURCE_ID` — the playbook library, on
+     **read_the_playbooks**. Easier from inside n8n: connect the Notion
+     credential, open the node and pick it from the _Data Source_ list. Note that
+     this is a **data source** id, not the database id in the page URL — one
+     database can hold several, and the API has addressed them separately since
+     its 2025-09-03 version. Share the database with your integration first, or
+     the list comes back empty.
+3. **Unpin `Get the people`** once the Sheets credential is on, or leave it —
+   pinned data is ignored by production executions either way. Unpinning just
+   stops manual runs from quietly using the samples.
+4. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
+   nothing else can subscribe to the same app, and the webhook needs a public
+   URL — a tunnel in front of localhost, or `npx n8n@2.35.7 start --tunnel` for a
+   throwaway one.
 
-   `daily_sales_goal` — sent every morning:
+Meta's free WhatsApp test number sends to **five** pre-registered recipients, each
+confirming by code in the dashboard, with no business verification. That is the
+cheapest way to put this in front of someone; going past five needs a real
+business number and Meta review.
 
-   > Morning {{1}} — today's goal is {{2}} sales calls. Reply any time with how
-   > many you've done.
+## Known defects
 
-   `daily_sales_nudge` — the end-of-day reminder, used whenever the rep is
-   outside the 24-hour window:
+**The coach forgets everyone within the hour.** `Remember the thread` is n8n's
+Simple Memory, and its implementation is a `Map` held in the n8n process behind a
+singleton. Every read first runs `cleanupStaleBuffers()`, which deletes any
+thread not touched for 60 minutes. A daily check-in is close to the worst case
+for that: someone answers the 08:30 message at 17:00 and the coach has no memory
+of the morning, so "how did that go?" means nothing to it. Three consequences
+worth knowing:
 
-   > Hi {{1}} — nothing logged for today yet. How many of your {{2}} calls did
-   > you get done?
+- **It is process-local.** Restart or redeploy n8n and every thread is gone. In
+  queue mode each worker keeps its own `Map`, so consecutive messages from the
+  same person can land on different halves of the conversation.
+- **`contextWindowLength` bounds turns, not tokens.** It is passed as
+  LangChain's `k`, so six turns is six turns — one pasted wall of text still
+  reaches the model whole.
+- **Heap grows with people active in the last hour**, not with the list. That
+  part is fine at demo scale and is not the reason to replace it.
 
-   Change the names in **Send today's goal** and **Nudge by template** if you
-   call yours something else; the format is `name|language`.
+_Fix, not done here:_ a persistent chat memory (Postgres or Redis), or drop the
+memory node entirely and read the person's last few `Days` rows into the prompt.
+The sheet already holds the history, deterministically and for free, and the
+agent already has the row key.
 
-5. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
-   nothing else can subscribe to the same app.
+**A partial write blanks the cells it has no value for.** All three Sheets nodes
+map every one of the 14 `Days` columns on an `appendOrUpdate`, so a second write
+to the same `key` overwrites columns the first one filled. Two ways that shows
+up: someone sends `6/3` and then corrects it to `7`, and the hours go back to
+empty; or the coach calls `log_the_day` with only a `note` — which the system
+prompt explicitly tells it to do rather than guess a number — and `calls` and
+`hours` are blanked while `status` still says `logged`. _Fix, not done here:_ read
+the row before writing and merge, or build the column map from only the fields
+that actually have a value.
 
-To try it before wiring WhatsApp up: pin some `Roster` rows on **Get the roster**
-and run lane 1 manually.
+**Two messages at once can double-write a row.** `appendOrUpdate` is a read then
+a write with nothing holding the row in between, and every inbound message
+starts its own execution. Someone sending `6` and then `3h` a second apart can
+have both executions find no matching row and append two, after which every
+later upsert only ever updates the first. _Fix, not done here:_ cap the workflow
+to one concurrent execution, or look the row id up and `update` it.
+
+**Retiring a playbook task is advisory.** `read_the_playbooks` has no filter, so
+an unticked `Active` row is still handed to the coach; the tool description tells
+it to ignore those, which is a request rather than a guarantee. Delete the row if
+it must never be suggested.
+
+**Nothing tests the agent.** See the note at the end of _Tests_.
 
 ## Design notes
 
-Things here were decided deliberately, and most of them the hard way.
+**The regex owns the log; the agent owns the conversation.** On a normal evening
+someone types `6` and a regex writes it. The agent only ever sees what the regex
+refused. That split is the point: the log is what any later scoring will be built
+on, so the number in it should not have a temperature. A structural test asserts
+that **Record the day** has exactly one upstream node.
+
+**The agent can fill in cells, not choose the row.** `log_the_day` takes `calls`,
+`hours` and `note` from `$fromAI()`; `key`, `date`, `phone` and both targets are
+expressions off the item. So the model can be wrong about a number someone said,
+but it cannot write that number onto the wrong person, the wrong day, or a target
+nobody set. It also cannot change a goal — only the `People` tab does that, and
+no node writes to it.
+
+**The coach's authority ends at the playbook library.** The system prompt forbids
+stating a price, a policy, a target or a number that is not in the prompt or in a
+row it just read, and tells it to hand anything else back to whoever set the
+goals. Grounding a coach persona is the whole difficulty: "be a coach" is an
+invitation to invent a discount floor, and someone will act on it.
+
+**One agent, many people, one thread each.** Memory is keyed on the phone number
+and the prompt says nothing from one person may appear in a reply to another.
+That is a prompt-level guarantee on top of a session-level one; the session key
+is the part that actually holds.
 
 **A blank is not a zero.** Lane 1 writes the row when the goal goes out, so the
-report can tell "said zero" from "never answered" — and so lane 1b knows who to
-chase. `asked` and `answered` are counted separately all the way through, and a
-silent day leaves the day column empty rather than plotting a 0.
-
-**Only the quiet ones get chased.** The nudge is driven off that empty cell, not
-off a list of everyone. Report at 09:00 and you never hear from it again that
-day. Re-running the lane will not nudge the same person twice, because the row
-it writes back is marked `nudged` and the code skips those.
-
-**The 24-hour window decides the nudge, not preference.** WhatsApp allows
-free-form text only within 24 hours of the person's own last message; outside it
-a business-initiated message must be an approved template with fixed wording.
-**Who still owes a number** works out which case applies from the log's own reply
-timestamps, and the two send paths diverge on it. Claude writes the message on
-the open-window path, from the rep's last seven days — a rolling seven, not the
-calendar week, because on a Monday a calendar week holds nothing but today and
-every rep would be greeted as if they had just joined.
+log can tell "said zero" from "never answered".
 
 **One key, written twice.** `date|phone` is built in lane 1 and rebuilt from the
-inbound message in lane 2. Both writes are `appendOrUpdate` matching on it, so an
-answer lands on its own question's row and a re-run never duplicates. The weekly
-report does the same with `week|phone`.
+inbound message in lane 2. Every write is `appendOrUpdate` matching on it, so the
+evening's answer lands on the morning's row and a re-run never duplicates.
 
 **A reply after midnight belongs to yesterday.** Replies before 04:00 local are
-attributed to the previous day — otherwise the 00:30 answer creates a second row
+attributed to the previous day — otherwise the 00:30 answer opens a second row
 for a day nobody was asked about.
 
-**Cheap path first, model second.** A regex handles nearly every reply. The
-Information Extractor only sees what the regex refused, and it refuses on
-purpose: a bare number is trusted only when the message is essentially just that
-number, so _"tomorrow I'll do 8"_ is not logged as eight calls today. Keeping
-the model on the tail also keeps the thing debuggable — most executions never
-touch it.
-
-**Both model branches degrade, they don't drop.** **Read it with Claude** and
-**Write the nudge** are set to _continue using error output_. No Anthropic
-credential, rate limit, bad day — the rep gets "reply with a plain number", or
-the template nudge, instead of silence. The workflow is useful with the AI nodes
-disconnected entirely; it just asks again more often and sounds more robotic.
-One **Claude** node backs both steps, so there is a single place to change model
-or effort.
-
-**Two surfaces, two jobs.** The per-day detail goes to the spreadsheet, where a
-client can pivot it however they like. WhatsApp gets one progress-to-goal bar per
-rep, because that is what survives being looked at on a phone. The value sits in
-the axis label rather than inside the bar — a rep on zero calls has no bar to
-write in, and that is precisely the rep you need to read.
-
-**The chart is a Chart.js config, not an image.** QuickChart renders it, but the
-same config drops into a web dashboard later without touching the aggregation.
-
-**WhatsApp's rules shaped the flow, not the other way round.** Business-initiated
-messages outside the 24-hour customer service window must be approved templates,
-which is why lane 1 sends a template and lane 2 — answering inside the window the
-rep just opened — sends free text. The Friday chart assumes the coach has
-messaged recently; if yours hasn't, that one needs a template with a media header
-too.
-
-**Small hygiene.** The trigger subscribes to `messages` only and filters out
-status callbacks, so delivered/read receipts don't wake the workflow. The roster
-read in lane 2 is `executeOnce`, so two messages in one webhook delivery don't
-read it twice. Outbound calls retry three times.
+**The coach degrades instead of dropping.** The agent is set to _continue using
+error output_, and both outputs land on the same Set node. No Anthropic
+credential, rate limit, bad day — the person gets "how many calls did you hold
+today?" rather than silence, and the regex lane logs their answer.
+**read_the_playbooks** continues on error too, so a Notion outage costs the
+citation and not the reply.
 
 ## Tests
 
-[![test](https://github.com/OlliTapio/sales_call_tracker/actions/workflows/test.yml/badge.svg)](https://github.com/OlliTapio/sales_call_tracker/actions/workflows/test.yml)
-
-The five Code nodes are the part most likely to be wrong, so they are checked.
-Their bodies are written in strict TypeScript under `src/` and compiled into
-`workflow.json` by `npm run build`, as flat, readable JavaScript you can still paste
-straight into the editor. Every behaviour test runs twice, against the source and
-against the compiled body, with the same globals and return contract n8n uses.
+The two Code nodes are the part most likely to be wrong, so they are checked.
+They are written in strict TypeScript under `src/` and compiled into
+`workflow.json` by `npm run build`, as flat, readable JavaScript that still
+pastes straight into the n8n editor. Every behaviour test runs twice, against the
+source and against the compiled body, with the globals n8n provides (`$input`,
+`$now`, `DateTime`, `$()`).
 
 ```
 npm install
@@ -176,39 +272,47 @@ npm run check        # everything CI runs
 npm run build        # after editing src/, recompile the Code nodes into workflow.json
 ```
 
-`npm run lint:workflow` catches the failures that otherwise only appear after
-import: a connection to a renamed node, an expression pointing at a node that no
-longer exists, a credential exported by accident, an outbound node without
-retries. How the code is organised and which tool enforces which rule is in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); agent instructions are in
+`npm run lint:workflow` reads the exported JSON and catches what only shows up
+after you import and press Execute: a connection to a renamed node, an expression
+pointing at a node that no longer exists, a placeholder that shipped. It also
+holds this workflow's own invariants, such as the regex owning the log and the
+agent writing only the cells the person spoke about, and it checks that the memory
+defect above is still documented on the canvas and in this file. How the code is
+organised, and which tool enforces which rule, is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Agent instructions are in
 [AGENTS.md](AGENTS.md).
 
-Beyond what CI runs, the workflow was checked against **n8n 2.35.7**: it imports
-cleanly, every parameter name matches the node definitions shipped in
-`n8n-nodes-base` and `@n8n/n8n-nodes-langchain`, and the earlier hand-written Code
-node bodies ran inside n8n's own runtime with the same assertions passing. The
-compiled bodies pass those same assertions in the harness, but have not yet been
-re-run inside n8n itself.
-
-Not yet exercised end to end: the live WhatsApp and Google Sheets calls, and the
-QuickChart render. Those need credentials — see _Design notes_ above for the
-WhatsApp windowing rules that constrain them.
+What the tests do **not** cover: nothing here calls a model. Every check
+exercises the deterministic code around the agent and the shape of the canvas.
+The agent's own behaviour — whether it logs the number that was actually said,
+whether it stays inside the playbook library, whether it holds 60 words — has no
+evals, and that is the next thing worth building.
 
 ## What is deliberately not here
 
-No retry-the-nudge-if-silent, no streaks or leaderboards, no per-rep timezones,
-no multi-coach routing. All are a node or two away; none of them are worth
-building before someone has used this for a fortnight.
+The **TODO** sticky on the canvas lists the rest:
 
-The model is `claude-opus-5` at low effort, which is far more than parsing
-"did 6, two no-shows" needs — swap it on the **Claude** node for something
-cheaper if the volume ever justifies caring.
+- **Weekly scoring.** Each focus against its target, in a Code node so the
+  scoring stays deterministic.
+- **One focus at a time.** When several things are off target, name one and queue
+  the rest.
+- **Friday scorecard.** The week as a chart, to the person and to whoever coaches
+  them.
+- **Chasing the quiet.** A nudge for anyone who never replied, respecting
+  WhatsApp's 24-hour free-text window.
+- **Calling, not only texting.** A ringing phone is a different kind of interrupt
+  from a message that sits unread all evening. An [ElevenLabs](https://elevenlabs.io/docs/agents-platform/phone-numbers/outbound-calling)
+  voice agent could place the nudge as an outbound call and take the number by
+  voice. It also sidesteps the 24-hour window, which governs WhatsApp messages
+  and not phone calls — at the cost of needing explicit consent to ring someone,
+  which the `People` sheet would have to record and honour.
+- **Evals.** Groundedness and logging accuracy on the coach reply — before any of
+  the above, because the above all trusts it.
 
-## Status and licence
+No embeddings and no vector store behind the playbook library. A few dozen
+curated rows read whole is enough, and it is inspectable — you can see exactly
+what the coach was given. Prose pages instead of a task table is where that stops
+being true.
 
-A reference implementation, not a maintained product — it exists to be read and
-copied from. Issues and forks are welcome; nothing here is promised to keep
-working against future n8n releases. Built against `n8n-nodes-base` 2.15 and
-`@n8n/n8n-nodes-langchain` 2.39.
-
-MIT, see [LICENSE](LICENSE).
+Built against `n8n-nodes-base` and `@n8n/n8n-nodes-langchain` 2.35.5, the versions
+shipped with n8n 2.35.7.

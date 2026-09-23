@@ -190,15 +190,21 @@ const aiNodesDegrade: Rule = {
 
 const noDisabledOrPinned: Rule = {
   id: 'no-disabled-or-pinned',
-  check: (wf) => [
+  check: (wf, ctx) => [
     ...wf.nodes
       .filter((n) => n['disabled'] === true)
       .map((n) =>
         finding('no-disabled-or-pinned', n.name, 'Disabled node shipped; delete it or enable it.'),
       ),
-    ...Object.keys(wf.pinData ?? {}).map((n) =>
-      finding('no-disabled-or-pinned', n, 'Pinned test data shipped; unpin before exporting.'),
-    ),
+    ...Object.keys(wf.pinData ?? {})
+      .filter((n) => !Object.hasOwn(ctx.pinnedData, n))
+      .map((n) =>
+        finding(
+          'no-disabled-or-pinned',
+          n,
+          'Pinned test data shipped; unpin it, or list it in PINNED_DATA with the reason.',
+        ),
+      ),
   ],
 };
 

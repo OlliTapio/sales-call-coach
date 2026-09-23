@@ -7,6 +7,7 @@ export interface HookInput {
   readonly tool_name?: string;
   readonly tool_input?: { readonly command?: string; readonly file_path?: string };
   readonly stop_hook_active?: boolean;
+  readonly session_id?: string;
   readonly cwd?: string;
 }
 

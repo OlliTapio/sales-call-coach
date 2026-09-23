@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { readWorkflow, type Workflow, type WorkflowNode } from '../../tools/build/workflow-file.ts';
 import { format, lintWorkflow, RULES } from '../../tools/workflow-lint/lint.ts';
-import { inWords } from '../../tools/workflow-lint/project-rules.ts';
+import { inWords } from '../../tools/workflow-lint/readme-rules.ts';
 
 const README = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
 const WORKFLOW = readWorkflow();
@@ -19,6 +19,10 @@ const setParam = (wf: Workflow, name: string, key: string, value: unknown): Work
   patchNode(wf, name, (n) => ({ ...n, parameters: { ...n.parameters, [key]: value } }));
 const set = (wf: Workflow, name: string, key: string, value: unknown): Workflow =>
   patchNode(wf, name, (n) => ({ ...n, [key]: value }));
+const without = (wf: Workflow, name: string): Workflow => ({
+  ...wf,
+  nodes: wf.nodes.filter((n) => n.name !== name),
+});
 const rewire = (
   wf: Workflow,
   source: string,
@@ -32,67 +36,61 @@ const rewire = (
     },
   },
 });
+const disconnect = (wf: Workflow, source: string): Workflow => ({
+  ...wf,
+  connections: { ...wf.connections, [source]: {} },
+});
+
+const GOALS = "Set today's goals";
+const IF = 'Did the regex read it?';
+const TIDY = 'Tidy the coach reply';
+const TERNARY = "={{ $json.a ? 'x' : 'y' }}";
 
 const BROKEN: readonly (readonly [string, Workflow, string?])[] = [
   ['has-workflow-id', { ...WORKFLOW, id: undefined }],
-  ['unique-names-and-ids', set(WORKFLOW, 'Claude', 'name', 'Read the log')],
+  ['unique-names-and-ids', set(WORKFLOW, 'Claude', 'name', 'Coach')],
   ['connections-resolve', rewire(WORKFLOW, 'Ghost', [['Nobody']])],
-  [
-    'node-refs-resolve',
-    setParam(WORKFLOW, 'Nudge in chat', 'textBody', "={{ $('Renamed').item.json.x }}"),
-  ],
-  ['no-orphans', { ...WORKFLOW, connections: { ...WORKFLOW.connections, 'Build the chart': {} } }],
-  ['balanced-expressions', setParam(WORKFLOW, 'Nudge in chat', 'textBody', '={{ $json.message ')],
-  [
-    'expression-complexity',
-    setParam(WORKFLOW, 'Nudge in chat', 'textBody', "={{ $json.a ? 'x' : 'y' }}"),
-  ],
-  [
-    'expression-complexity',
-    setParam(WORKFLOW, 'Tidy the nudge', 'assignments', {}),
-    'Listed as an exception',
-  ],
-  [
-    'no-credentials-exported',
-    set(WORKFLOW, 'Claude', 'credentials', { anthropicApi: { id: '1' } }),
-  ],
-  ['no-hardcoded-targets', setParam(WORKFLOW, 'Nudge in chat', 'phoneNumberId', '123456789012345')],
-  ['no-default-node-names', set(WORKFLOW, 'Build the chart', 'name', 'Code1')],
-  ['code-nodes-are-generated', setParam(WORKFLOW, 'Build the chart', 'jsCode', 'return [];')],
-  [
-    'code-nodes-are-generated',
-    { ...WORKFLOW, nodes: WORKFLOW.nodes.filter((n) => n.name !== 'Build the chart') },
-  ],
-  ['outbound-retries', set(WORKFLOW, 'Log the goal', 'retryOnFail', false)],
-  ['ai-nodes-degrade', set(WORKFLOW, 'Read it with Claude', 'onError', 'stopWorkflow')],
-  ['no-disabled-or-pinned', set(WORKFLOW, 'Log the goal', 'disabled', true)],
-  ['no-disabled-or-pinned', { ...WORKFLOW, pinData: { 'Get the roster': [] } }],
+  ['node-refs-resolve', setParam(WORKFLOW, 'Send the goals', 'textBody', "={{ $('Gone').x }}")],
+  ['no-orphans', disconnect(WORKFLOW, 'Send the goals')],
+  ['balanced-expressions', setParam(WORKFLOW, 'Send the goals', 'textBody', '={{ $json.x ')],
+  ['expression-complexity', setParam(WORKFLOW, 'Send the goals', 'textBody', TERNARY)],
+  ['expression-complexity', setParam(WORKFLOW, TIDY, 'assignments', {}), 'Listed as an exception'],
+  ['no-credentials-exported', set(WORKFLOW, 'Claude', 'credentials', { anthropicApi: {} })],
+  ['no-hardcoded-targets', setParam(WORKFLOW, 'Send the goals', 'phoneNumberId', '1234567')],
+  ['no-default-node-names', set(WORKFLOW, TIDY, 'name', 'Edit Fields1')],
+  ['code-nodes-are-generated', setParam(WORKFLOW, GOALS, 'jsCode', 'return [];')],
+  ['code-nodes-are-generated', without(WORKFLOW, GOALS)],
+  ['outbound-retries', set(WORKFLOW, 'Log the goals', 'retryOnFail', false)],
+  ['ai-nodes-degrade', set(WORKFLOW, 'Coach', 'onError', 'stopWorkflow')],
+  ['no-disabled-or-pinned', set(WORKFLOW, 'Log the goals', 'disabled', true)],
+  ['no-disabled-or-pinned', { ...WORKFLOW, pinData: { 'Record the day': [] } }],
   ['timezone-matches-code', { ...WORKFLOW, settings: { timezone: 'UTC' } }],
+  ['sticky-note-per-lane', without(WORKFLOW, '1 · Goals note')],
+  ['regex-owns-the-log', rewire(WORKFLOW, IF, [['Coach'], ['Record the day']])],
+  ['regex-owns-the-log', rewire(WORKFLOW, 'Coach', [[TIDY, 'Record the day'], [TIDY]])],
+  ['days-upserts-on-key', setParam(WORKFLOW, 'Record the day', 'operation', 'append')],
   [
-    'sticky-note-per-lane',
-    { ...WORKFLOW, nodes: WORKFLOW.nodes.filter((n) => n.name !== 'Lane 3 note') },
+    'agent-writes-only-spoken-cells',
+    setParam(WORKFLOW, 'log_the_day', 'columns', { value: { key: "={{ $fromAI('key') }}" } }),
   ],
-  ['templates-match-readme', setParam(WORKFLOW, 'Nudge by template', 'template', 'other|en')],
-  ['nudge-falls-back-to-template', rewire(WORKFLOW, 'Write the nudge', [['Tidy the nudge'], []])],
-  [
-    'reply-parser-degrades',
-    rewire(WORKFLOW, 'Read it with Claude', [["Apply the model's answer"], []]),
-  ],
-  [
-    'one-model-node',
-    { ...WORKFLOW, connections: { ...WORKFLOW.connections, Claude: { ai_languageModel: [[]] } } },
-  ],
-  ['reply-lane-hygiene', set(WORKFLOW, 'Get the roster (reply)', 'executeOnce', false)],
+  ['agent-cluster', disconnect(WORKFLOW, 'read_the_playbooks')],
+  ['agent-cluster', set(WORKFLOW, 'Remember the thread', 'parameters', { sessionIdType: 'x' })],
+  ['agent-degrades', rewire(WORKFLOW, 'Coach', [[TIDY], []])],
+  ['agent-degrades', setParam(WORKFLOW, TIDY, 'assignments', { assignments: [] })],
+  ['playbooks-read-whole', setParam(WORKFLOW, 'read_the_playbooks', 'returnAll', false)],
+  ['reply-lane-hygiene', set(WORKFLOW, 'Get the people (reply)', 'executeOnce', false)],
   ['reply-lane-hygiene', setParam(WORKFLOW, 'WhatsApp Trigger', 'options', {})],
-  ['log-upserts-on-key', setParam(WORKFLOW, 'Log the goal', 'operation', 'append')],
   [
     'placeholders-match-readme',
-    setParam(WORKFLOW, 'Nudge in chat', 'phoneNumberId', 'REPLACE_WITH_SOMETHING'),
+    setParam(WORKFLOW, 'Send the goals', 'phoneNumberId', 'REPLACE_WITH_SOMETHING'),
   ],
   [
-    'readme-counts-match-canvas',
-    { ...WORKFLOW, nodes: WORKFLOW.nodes.filter((n) => n.name !== 'Lane 1 note') },
+    'placeholders-match-readme',
+    patchNode(WORKFLOW, 'read_the_playbooks', (n) => ({ ...n, parameters: { resource: 'x' } })),
+    'Carries a real id',
   ],
+  ['known-defects-documented', without(WORKFLOW, 'Known defects note')],
+  ['readme-counts-match-canvas', without(WORKFLOW, 'TODO note')],
 ];
 
 describe('workflow lint', () => {
@@ -101,9 +99,8 @@ describe('workflow lint', () => {
   });
 
   test('every rule has a failing case below', () => {
-    expect(RULES.map((r) => r.id).filter((id) => !BROKEN.some(([rule]) => rule === id))).toEqual(
-      [],
-    );
+    const covered = new Set(BROKEN.map(([rule]) => rule));
+    expect(RULES.map((r) => r.id).filter((id) => !covered.has(id))).toEqual([]);
   });
 
   const cases = BROKEN.map(([rule, broken, message]) => ({ rule, broken, message }));
@@ -113,9 +110,14 @@ describe('workflow lint', () => {
     if (message !== undefined) expect(hits.map((h) => h.message).join('\n')).toContain(message);
   });
 
-  test('the README placeholder check reads the README', () => {
-    expect(lintWorkflow(WORKFLOW, '').some((f) => f.rule === 'placeholders-match-readme')).toBe(
-      true,
+  test('the README rules read the README', () => {
+    const rules = new Set(lintWorkflow(WORKFLOW, '').map((f) => f.rule));
+    expect(rules).toEqual(
+      new Set([
+        'placeholders-match-readme',
+        'known-defects-documented',
+        'readme-counts-match-canvas',
+      ]),
     );
   });
 });

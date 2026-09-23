@@ -1,6 +1,6 @@
 # Agent instructions
 
-n8n workflow (`workflow.json`) whose five Code-node bodies are compiled from strict
+n8n workflow (`workflow.json`) whose two Code-node bodies are compiled from strict
 TypeScript in `src/`. Read `docs/ARCHITECTURE.md` before changing structure.
 
 ## Commands

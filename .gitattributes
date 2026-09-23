@@ -1,2 +1,4 @@
+# jsCode is embedded in workflow.json with LF endings, so the files it is
+# spliced from have to check out the same way on every platform.
 * text=auto eol=lf
 *.png binary

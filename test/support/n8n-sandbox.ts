@@ -4,11 +4,9 @@
  */
 import { DateTime } from 'luxon';
 import { vi } from 'vitest';
-import * as aggregate from '../../src/nodes/aggregate-the-week.ts';
-import * as chart from '../../src/nodes/build-the-chart.ts';
-import * as reply from '../../src/nodes/match-rep-and-parse-reply.ts';
-import * as pick from '../../src/nodes/pick-todays-reps.ts';
-import * as nudge from '../../src/nodes/who-still-owes-a-number.ts';
+import * as reply from '../../src/nodes/match-person-and-parse-reply.ts';
+import * as goals from '../../src/nodes/set-todays-goals.ts';
+import { ZONE } from '../../src/shared/config.ts';
 import type { CodeNodeName } from '../../tools/build/code-nodes.ts';
 import { readWorkflow } from '../../tools/build/workflow-file.ts';
 
@@ -22,18 +20,14 @@ interface NodeContext {
 
 export type Runner = (node: CodeNodeName, context?: NodeContext) => readonly Json[];
 
-const ZONE = 'Europe/Helsinki';
 export const at = (iso: string): ReturnType<typeof DateTime.fromISO> =>
   DateTime.fromISO(iso, { zone: ZONE });
 
 const SOURCES: Readonly<
   Record<CodeNodeName, { readonly main: () => readonly { json: unknown }[] }>
 > = {
-  "Pick today's reps": pick,
-  'Who still owes a number': nudge,
-  'Match rep & parse reply': reply,
-  'Aggregate the week': aggregate,
-  'Build the chart': chart,
+  "Set today's goals": goals,
+  'Match person & parse reply': reply,
 };
 
 const wrap = (rows: readonly Json[]) => ({ all: () => rows.map((json) => ({ json })) });
