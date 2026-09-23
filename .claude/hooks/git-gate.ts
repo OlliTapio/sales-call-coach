@@ -5,11 +5,18 @@
 import { block, readInput, run, tail } from './lib.ts';
 
 const command = readInput().tool_input?.command ?? '';
-const isPush = /\bgit\s+(?:-\S+\s+)*push\b/.test(command);
-const isCommit = /\bgit\s+(?:-\S+\s+)*commit\b/.test(command);
+
+/** Only a git invocation at a command position counts, not the words inside a PR body. */
+const invocation = (verb: string): string | undefined =>
+  new RegExp(`(?:^|[;&|(]|\\n)\\s*git\\s+(?:-\\S+\\s+)*${verb}\\b[^;&|\\n]*`).exec(command)?.[0];
+
+const push = invocation('push');
+const commit = invocation('commit');
+const isPush = push !== undefined;
+const isCommit = commit !== undefined;
 
 if (isPush || isCommit) {
-  if (/--no-verify\b|\s-n\b/.test(command)) {
+  if (/--no-verify\b|\s-n\b/.test(`${push ?? ''} ${commit ?? ''}`)) {
     block('Do not bypass the checks with --no-verify. Fix what `npm run check` reports instead.');
   }
   const script = isPush ? 'check' : 'check:fast';
