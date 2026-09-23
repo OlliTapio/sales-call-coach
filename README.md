@@ -16,10 +16,10 @@ three lanes on one canvas, plus five sticky notes.
 agent's model, memory and two tools hanging below it, and sticky notes for the
 TODO list and the known defects](workflow.png)
 
-*Imported into n8n 2.35.7 with no credentials configured. The red triangles are
+_Imported into n8n 2.35.7 with no credentials configured. The red triangles are
 the missing credentials; `Get the people` shows `3 items` because the sample rows
 are pinned, which is what makes the canvas explorable before you connect
-anything.*
+anything._
 
 ## What it does
 
@@ -30,7 +30,7 @@ with `status = goal_set` and **empty** `calls` and `hours` cells.
 
 **2 · Check-in** — the WhatsApp Trigger fires on the reply. `6`, `6/3`, `all`
 and `none` are read by a regex, written straight to the sheet, and confirmed in
-one line. No model is involved, and no model *can* be: **Record the day** has
+one line. No model is involved, and no model _can_ be: **Record the day** has
 exactly one node feeding it, and it is the IF.
 
 **3 · Coach** — everything the regex refused goes to one agent with two tools. It
@@ -44,10 +44,10 @@ person is asked for a plain number instead — which lane 2 can still log.
 One Google Sheet, two tabs. `sheets/*.csv` has the headers and some sample rows —
 import each one as a tab of the same name, or paste the header row in by hand.
 
-| Tab | What it holds | You edit |
-|---|---|---|
+| Tab      | What it holds                                                                | You edit                           |
+| -------- | ---------------------------------------------------------------------------- | ---------------------------------- |
 | `People` | `name`, `phone`, `calls_target`, `hours_cap`, `focus`, `goal_text`, `active` | yes — the only tab a human touches |
-| `Days` | one row per person per day, upserted on `key` (`date` + `phone`) | no |
+| `Days`   | one row per person per day, upserted on `key` (`date` + `phone`)             | no                                 |
 
 Phone numbers go in in international form without the `+` (`358401234567`); the
 workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
@@ -60,23 +60,23 @@ it blank and the person still gets their numbers.
 ## The playbook library
 
 One Notion database, eight columns. `notion/Playbooks.csv` is a starter set —
-import it into Notion (*⋯ → Import → CSV*), then point `read_the_playbooks` at
+import it into Notion (_⋯ → Import → CSV_), then point `read_the_playbooks` at
 it.
 
-| Column | Type | What it is |
-|---|---|---|
-| `Task` | Title | the task, as you would tell someone to do it |
-| `Why` | Text | one line on what it fixes |
-| `Focus` | Select | matches the `focus` on the person's row |
-| `Pillar` | Select | which part of the business it belongs to |
-| `Priority` | Select | Urgent, High or Medium |
-| `Playbook` | Select | where it comes from |
-| `Effort` | Text | how long it takes |
-| `Active` | Checkbox | untick to retire a task — advisory, see *Known defects* |
+| Column     | Type     | What it is                                              |
+| ---------- | -------- | ------------------------------------------------------- |
+| `Task`     | Title    | the task, as you would tell someone to do it            |
+| `Why`      | Text     | one line on what it fixes                               |
+| `Focus`    | Select   | matches the `focus` on the person's row                 |
+| `Pillar`   | Select   | which part of the business it belongs to                |
+| `Priority` | Select   | Urgent, High or Medium                                  |
+| `Playbook` | Select   | where it comes from                                     |
+| `Effort`   | Text     | how long it takes                                       |
+| `Active`   | Checkbox | untick to retire a task — advisory, see _Known defects_ |
 
 This database is the coach's entire world. It is read whole on each call, because
 a few dozen rows cost less to hand over than to filter. That is a size argument,
-not a limitation: a Notion database query *can* filter on `Focus`, and doing so
+not a limitation: a Notion database query _can_ filter on `Focus`, and doing so
 is on the TODO note — the whole library goes into the model's context on every
 tool call today, which is linear in how big the library gets.
 
@@ -103,7 +103,7 @@ above, on Windows with Node 24; they work the same on macOS and Linux.
    ```
 
    Expect `Successfully imported 1 workflow.` The `Failed to load Custom API
-   options for the node "n8n-nodes-base.confluence"` lines above it are n8n
+options for the node "n8n-nodes-base.confluence"` lines above it are n8n
    loading its own node catalogue and have nothing to do with this workflow.
 
    The file carries a fixed `id` (`whatsappCoach`), so a re-import updates the
@@ -133,8 +133,8 @@ To delete the whole thing afterwards, remove `.n8n-local`. It is gitignored.
 and the pinned rows flow. It does not execute end to end — every send and every
 write needs a real credential, and `n8n execute --id` refuses this workflow
 outright because it has no Execute Workflow Trigger. For the Code nodes, the test
-suite is the stronger check anyway: it runs each `code/*.js` file the way n8n runs
-it. See *Tests*.
+suite is the stronger check anyway: it runs each compiled Code-node body the way n8n runs
+it. See _Tests_.
 
 ## Connecting it for real
 
@@ -147,7 +147,7 @@ it. See *Tests*.
    - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all three WhatsApp nodes
    - `REPLACE_WITH_NOTION_DATA_SOURCE_ID` — the playbook library, on
      **read_the_playbooks**. Easier from inside n8n: connect the Notion
-     credential, open the node and pick it from the *Data Source* list. Note that
+     credential, open the node and pick it from the _Data Source_ list. Note that
      this is a **data source** id, not the database id in the page URL — one
      database can hold several, and the API has addressed them separately since
      its 2025-09-03 version. Share the database with your integration first, or
@@ -184,7 +184,7 @@ worth knowing:
 - **Heap grows with people active in the last hour**, not with the list. That
   part is fine at demo scale and is not the reason to replace it.
 
-*Fix, not done here:* a persistent chat memory (Postgres or Redis), or drop the
+_Fix, not done here:_ a persistent chat memory (Postgres or Redis), or drop the
 memory node entirely and read the person's last few `Days` rows into the prompt.
 The sheet already holds the history, deterministically and for free, and the
 agent already has the row key.
@@ -195,7 +195,7 @@ to the same `key` overwrites columns the first one filled. Two ways that shows
 up: someone sends `6/3` and then corrects it to `7`, and the hours go back to
 empty; or the coach calls `log_the_day` with only a `note` — which the system
 prompt explicitly tells it to do rather than guess a number — and `calls` and
-`hours` are blanked while `status` still says `logged`. *Fix, not done here:* read
+`hours` are blanked while `status` still says `logged`. _Fix, not done here:_ read
 the row before writing and merge, or build the column map from only the fields
 that actually have a value.
 
@@ -203,7 +203,7 @@ that actually have a value.
 a write with nothing holding the row in between, and every inbound message
 starts its own execution. Someone sending `6` and then `3h` a second apart can
 have both executions find no matching row and append two, after which every
-later upsert only ever updates the first. *Fix, not done here:* cap the workflow
+later upsert only ever updates the first. _Fix, not done here:_ cap the workflow
 to one concurrent execution, or look the row id up and `update` it.
 
 **Retiring a playbook task is advisory.** `read_the_playbooks` has no filter, so
@@ -211,7 +211,7 @@ an unticked `Active` row is still handed to the coach; the tool description tell
 it to ignore those, which is a request rather than a guarantee. Delete the row if
 it must never be suggested.
 
-**Nothing tests the agent.** See the note at the end of *Tests*.
+**Nothing tests the agent.** See the note at the end of _Tests_.
 
 ## Design notes
 
@@ -250,8 +250,8 @@ evening's answer lands on the morning's row and a re-run never duplicates.
 attributed to the previous day — otherwise the 00:30 answer opens a second row
 for a day nobody was asked about.
 
-**The coach degrades instead of dropping.** The agent is set to *continue using
-error output*, and both outputs land on the same Set node. No Anthropic
+**The coach degrades instead of dropping.** The agent is set to _continue using
+error output_, and both outputs land on the same Set node. No Anthropic
 credential, rate limit, bad day — the person gets "how many calls did you hold
 today?" rather than silence, and the regex lane logs their answer.
 **read_the_playbooks** continues on error too, so a Notion outage costs the
@@ -259,23 +259,28 @@ citation and not the reply.
 
 ## Tests
 
-The Code nodes are the part most likely to be wrong, so they are checked. The
-harness runs each `code/*.js` file the way n8n runs it — the file is the function
-body, `$input` / `$now` / `DateTime` / `$()` are globals — so the same file is
-pasted into n8n unchanged.
+The two Code nodes are the part most likely to be wrong, so they are checked.
+They are written in strict TypeScript under `src/` and compiled into
+`workflow.json` by `npm run build`, as flat, readable JavaScript that still
+pastes straight into the n8n editor. Every behaviour test runs twice, against the
+source and against the compiled body, with the globals n8n provides (`$input`,
+`$now`, `DateTime`, `$()`).
 
 ```
 npm install
-npm test        # 50 checks
-npm run sync    # write code/*.js into workflow.json after editing one
+npm run check        # everything CI runs
+npm run build        # after editing src/, recompile the Code nodes into workflow.json
 ```
 
-`code/*.js` is the source of truth for the Code nodes; `npm test` fails if
-`workflow.json` has drifted from it. Twenty-six of the checks are structural:
-they read the exported JSON and catch what only shows up after you import and
-press Execute — a connection to a renamed node, an expression pointing at a node
-that no longer exists, a placeholder that shipped. One of them asserts that the
-memory defect above is still documented on the canvas and in this file.
+`npm run lint:workflow` reads the exported JSON and catches what only shows up
+after you import and press Execute: a connection to a renamed node, an expression
+pointing at a node that no longer exists, a placeholder that shipped. It also
+holds this workflow's own invariants, such as the regex owning the log and the
+agent writing only the cells the person spoke about, and it checks that the memory
+defect above is still documented on the canvas and in this file. How the code is
+organised, and which tool enforces which rule, is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Agent instructions are in
+[AGENTS.md](AGENTS.md).
 
 What the tests do **not** cover: nothing here calls a model. Every check
 exercises the deterministic code around the agent and the shape of the canvas.
