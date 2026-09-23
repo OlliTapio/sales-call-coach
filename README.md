@@ -155,11 +155,21 @@ it. See _Tests_.
 3. **Unpin `Get the people`** once the Sheets credential is on, or leave it —
    pinned data is ignored by production executions either way. Unpinning just
    stops manual runs from quietly using the samples.
-4. **Activate.** Telegram allows one webhook per bot, so nothing else can
-   subscribe to the same token, and it needs a public HTTPS URL — a tunnel in
-   front of localhost, or `npx n8n@2.35.7 start --tunnel` for a throwaway one.
-   n8n calls `setWebhook` itself on activation; there is nothing to register by
-   hand.
+4. **Give n8n a public HTTPS URL, then publish.** Telegram allows one webhook
+   per bot, so nothing else can subscribe to the same token. n8n 2.0 **removed
+   `--tunnel`** and ignores it silently, so bring your own tunnel and tell n8n
+   its address — without `WEBHOOK_URL` n8n registers `localhost` with Telegram
+   and every delivery is dropped.
+
+   ```bash
+   cloudflared tunnel --url http://localhost:5678   # prints https://<name>.trycloudflare.com
+   WEBHOOK_URL="https://<name>.trycloudflare.com" npx n8n@2.35.7 start
+   ```
+
+   Then publish the workflow from the editor. n8n calls `setWebhook` itself;
+   there is nothing to register by hand. A quick tunnel's hostname changes every
+   time it restarts, so n8n has to be restarted with the new `WEBHOOK_URL` and
+   the workflow published again.
 
 A bot is made by sending [@BotFather](https://t.me/BotFather) `/newbot`; it
 answers with the token, and the token is the whole credential. No business
