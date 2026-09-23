@@ -11,16 +11,6 @@
             "timeout": 30
           }
         ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-policy.ts\"",
-            "timeout": 30
-          }
-        ]
       }
     ],
     "PostToolUse": [

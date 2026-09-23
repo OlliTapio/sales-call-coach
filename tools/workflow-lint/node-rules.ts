@@ -4,11 +4,10 @@ import { CODE_NODES, isCodeNodeName } from '../build/code-nodes.ts';
 import type { WorkflowNode } from '../build/workflow-file.ts';
 import { eachNode, finding, strings, type Rule } from './rule.ts';
 
-const OUTBOUND = new Set([
-  'n8n-nodes-base.whatsApp',
-  'n8n-nodes-base.httpRequest',
-  'n8n-nodes-base.googleSheets',
-]);
+/** Safe to retry: reads, and upserts on a key. */
+const IDEMPOTENT = new Set(['n8n-nodes-base.googleSheets']);
+/** n8n retries a whole node and WhatsApp has no idempotency key, so a retry can double-send. */
+const SENDS = new Set(['n8n-nodes-base.whatsApp']);
 const AI_ROOTS = new Set([
   '@n8n/n8n-nodes-langchain.chainLlm',
   '@n8n/n8n-nodes-langchain.informationExtractor',
@@ -154,9 +153,9 @@ const codeNodesAreGenerated: Rule = {
 
 const outboundRetries: Rule = {
   id: 'outbound-retries',
-  check: (wf) =>
-    wf.nodes
-      .filter((n) => OUTBOUND.has(n.type))
+  check: (wf) => [
+    ...wf.nodes
+      .filter((n) => IDEMPOTENT.has(n.type))
       .filter(
         (n) => n['retryOnFail'] !== true || typeof n['maxTries'] !== 'number' || n['maxTries'] < 3,
       )
@@ -164,9 +163,19 @@ const outboundRetries: Rule = {
         finding(
           'outbound-retries',
           n.name,
-          'Outbound call without retries; set retryOnFail, maxTries ≥ 3.',
+          'Idempotent call without retries; set retryOnFail, maxTries ≥ 3.',
         ),
       ),
+    ...wf.nodes
+      .filter((n) => SENDS.has(n.type) && n['retryOnFail'] === true)
+      .map((n) =>
+        finding(
+          'outbound-retries',
+          n.name,
+          'A retried send can reach the person twice; turn retryOnFail off on message sends.',
+        ),
+      ),
+  ],
 };
 
 const aiNodesDegrade: Rule = {

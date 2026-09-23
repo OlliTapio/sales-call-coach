@@ -76,8 +76,8 @@ const nodeRefsResolve: Rule = {
   check: (wf) => {
     const names = new Set(wf.nodes.map((n) => n.name));
     return eachNode(wf, (node) =>
-      [...JSON.stringify(node.parameters).matchAll(/\$\('([^']+)'\)/g)]
-        .map((m) => m[1] ?? '')
+      [...JSON.stringify(node.parameters).matchAll(/\$\((?:'([^']+)'|\\"((?:[^"\\]|\\.)+)\\")\)/g)]
+        .map((m) => m[1] ?? m[2] ?? '')
         .filter((ref) => !names.has(ref))
         .map((ref) =>
           finding('node-refs-resolve', node.name, `$('${ref}') names a node that does not exist.`),

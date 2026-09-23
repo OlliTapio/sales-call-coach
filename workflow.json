@@ -96,10 +96,7 @@
       "position": [
         400,
         40
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      ]
     },
     {
       "parameters": {
@@ -369,10 +366,7 @@
       "position": [
         1080,
         460
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      ]
     },
     {
       "parameters": {
@@ -574,10 +568,7 @@
       "position": [
         1300,
         800
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      ]
     },
     {
       "parameters": {

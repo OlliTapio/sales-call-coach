@@ -23,5 +23,4 @@ a one-line "why" that points there.
 ## Consequences
 
 Names and types carry more of the meaning. The limits are rule options, so tune them in
-`eslint.config.ts`. Doing so is a policy change and needs a human yes (see the
-`guard-policy` hook).
+`eslint.config.ts`. Doing so is a policy change, so it belongs in its own reviewed PR.

@@ -61,6 +61,15 @@ const BROKEN: readonly (readonly [string, Workflow, string?])[] = [
   ['code-nodes-are-generated', setParam(WORKFLOW, GOALS, 'jsCode', 'return [];')],
   ['code-nodes-are-generated', without(WORKFLOW, GOALS)],
   ['outbound-retries', set(WORKFLOW, 'Log the goals', 'retryOnFail', false)],
+  [
+    'outbound-retries',
+    set(WORKFLOW, 'Send the goals', 'retryOnFail', true),
+    'reach the person twice',
+  ],
+  [
+    'node-refs-resolve',
+    setParam(WORKFLOW, GOALS, 'jsCode', '// Generated from src/nodes/x\n$("Renamed").all();'),
+  ],
   ['ai-nodes-degrade', set(WORKFLOW, 'Coach', 'onError', 'stopWorkflow')],
   ['no-disabled-or-pinned', set(WORKFLOW, 'Log the goals', 'disabled', true)],
   ['no-disabled-or-pinned', { ...WORKFLOW, pinData: { 'Record the day': [] } }],

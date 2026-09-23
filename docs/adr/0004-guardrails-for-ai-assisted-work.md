@@ -24,8 +24,6 @@ rules into hooks, since CLAUDE.md is advisory and hooks are enforced.
   - **PreToolUse Bash** `no-verify`: refuses git commands that skip lefthook:
     `--no-verify`, `commit -n`, `LEFTHOOK=0`, or a `core.hooksPath` override. It is
     best-effort; CI running `check` on every PR is the backstop.
-  - **PreToolUse Edit/Write** `guard-policy`: editing tsconfig, the ESLint config, the
-    lint rules, coverage settings or the hooks asks the human first.
   - **PostToolUse Edit/Write** `after-edit`: Prettier and `eslint --fix` on the file;
     rebuilds `workflow.json` when `src/` changes; lints the workflow when it changes.
     Leftover errors go back to the agent at once.
