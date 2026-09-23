@@ -97,7 +97,8 @@ test('parse: a bare number is the whole check-in', () => {
 });
 
 test('parse: calls and hours together, however they are separated', () => {
-  for (const body of ['6/3', '6 / 3', '6-3', '6,3', '6/3h']) {
+  // Not "6,3": a comma is a decimal point here, see the separator test below.
+  for (const body of ['6/3', '6 / 3', '6-3', '6/3h']) {
     const r = one(body);
     assert.equal(r.calls, 6, body);
     assert.equal(r.hours, 3, body);
@@ -114,16 +115,55 @@ test('parse: "all" means the target, "none" means zero — not the same as silen
   assert.equal(one('none').parsed, true);
 });
 
+test('parse: the rollover boundary is where the comment says it is', () => {
+  // DAY_ROLLOVER_HOUR is restated in prose in the README, so pin the edge.
+  assert.equal(one('6', { at: '2026-09-22T03:59:00' }).date, '2026-09-21');
+  assert.equal(one('6', { at: '2026-09-22T04:00:00' }).date, '2026-09-22');
+});
+
 test('parse: the target comes from the person who sent it', () => {
   assert.equal(one('all', { from: '358401234568' }).calls, 5);
 });
 
 test('parse: a sentence goes to the coach, even when it contains a number', () => {
-  // The regex must not log "tomorrow I'll do 8" as eight calls today.
-  for (const body of ["tomorrow I'll do 8", 'rough day, maybe 3 but two cancelled', 'what is our refund window?']) {
+  // These are the ones that actually bit: the match used to be unanchored
+  // behind a 12-character cutoff, so every short message carrying a digit was
+  // logged as a call count and confirmed back, with no model in the loop.
+  const sentences = [
+    "tomorrow I'll do 8", 'rough day, maybe 3 but two cancelled', 'what is our refund window?',
+    'tomorrow 8', 'maybe 3?', 'not 5', 'call 2 pm', 'sick 0',
+    'see you 5pm', 'in 10 min', '18:30', 'call at 7', '21.9.',
+  ];
+  for (const body of sentences) {
     assert.equal(one(body).parsed, false, body);
     assert.equal(one(body).calls, '', body);
     assert.equal(one(body).status, 'unparsed', body);
+  }
+});
+
+test('parse: a bare yes or no belongs to the coach, not to the log', () => {
+  // The coach asks questions of its own, so "yes" is as likely to be answering
+  // one of those as reporting a full day. It used to log the whole target.
+  for (const body of ['yes', 'yep', 'done', 'joo', 'no', 'nope', 'ei']) {
+    assert.equal(one(body).parsed, false, body);
+  }
+  // The unambiguous ones still count.
+  assert.equal(one('all').calls, 8);
+  assert.equal(one('kaikki').calls, 8);
+  assert.equal(one('none').calls, 0);
+  assert.equal(one('0').calls, 0);
+});
+
+test('parse: a comma is a decimal point, never a separator', () => {
+  // "2,5" is two and a half hours to a Finnish typist; it must not read as two
+  // calls in five hours. Ambiguous, so it goes to the coach.
+  assert.equal(one('2,5').parsed, false);
+  assert.equal(one('6/2,5').hours, 2.5);
+});
+
+test('parse: a trailing unit or full stop still reads as a count', () => {
+  for (const body of ['6', '6 calls', '6 call', '6.', '6 puhelua']) {
+    assert.equal(one(body).calls, 6, body);
   }
 });
 

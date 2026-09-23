@@ -72,7 +72,7 @@ it.
 | `Priority` | Select | Urgent, High or Medium |
 | `Playbook` | Select | where it comes from |
 | `Effort` | Text | how long it takes |
-| `Active` | Checkbox | untick to retire a task without deleting it |
+| `Active` | Checkbox | untick to retire a task — advisory, see *Known defects* |
 
 This database is the coach's entire world. It is read whole on each call — the
 library is a few dozen rows, and Notion's search endpoint matches page *titles*
@@ -187,6 +187,28 @@ memory node entirely and read the person's last few `Days` rows into the prompt.
 The sheet already holds the history, deterministically and for free, and the
 agent already has the row key.
 
+**A partial write blanks the cells it has no value for.** All three Sheets nodes
+map every one of the 14 `Days` columns on an `appendOrUpdate`, so a second write
+to the same `key` overwrites columns the first one filled. Two ways that shows
+up: someone sends `6/3` and then corrects it to `7`, and the hours go back to
+empty; or the coach calls `log_the_day` with only a `note` — which the system
+prompt explicitly tells it to do rather than guess a number — and `calls` and
+`hours` are blanked while `status` still says `logged`. *Fix, not done here:* read
+the row before writing and merge, or build the column map from only the fields
+that actually have a value.
+
+**Two messages at once can double-write a row.** `appendOrUpdate` is a read then
+a write with nothing holding the row in between, and every inbound message
+starts its own execution. Someone sending `6` and then `3h` a second apart can
+have both executions find no matching row and append two, after which every
+later upsert only ever updates the first. *Fix, not done here:* cap the workflow
+to one concurrent execution, or look the row id up and `update` it.
+
+**Retiring a playbook task is advisory.** `read_the_playbooks` has no filter, so
+an unticked `Active` row is still handed to the coach; the tool description tells
+it to ignore those, which is a request rather than a guarantee. Delete the row if
+it must never be suggested.
+
 **Nothing tests the agent.** See the note at the end of *Tests*.
 
 ## Design notes
@@ -242,7 +264,7 @@ pasted into n8n unchanged.
 
 ```
 npm install
-npm test        # 44 checks
+npm test        # 48 checks
 npm run sync    # write code/*.js into workflow.json after editing one
 ```
 

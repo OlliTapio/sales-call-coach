@@ -1,4 +1,4 @@
 key,date,weekday,name,phone,focus,calls_target,calls,hours_cap,hours,status,note,raw_reply,logged_at
-2026-09-21|358401234567,2026-09-21,Mon,Anna Virtanen,358401234567,close,8,6,2,3,logged,two no-shows,6 calls and about 3h on them,2026-09-21T17:40:00.000+03:00
-2026-09-21|358401234568,2026-09-21,Mon,Mikko Laine,358401234568,hours,5,5,3,6,logged,delivery fire,5/6,2026-09-21T19:12:00.000+03:00
-2026-09-21|358401234570,2026-09-21,Mon,Sofia Berg,358401234570,profit,10,,1,,goal_set,,,2026-09-21T08:30:00.000+03:00
+2026-09-21|358401234567,2026-09-21,Mon,Anna Virtanen,358401234567,close rate,8,6,2,3,logged,two no-shows,6/3,2026-09-21T17:40:00.000+03:00
+2026-09-21|358401234568,2026-09-21,Mon,Mikko Laine,358401234568,founder hours,5,5,3,6,logged,delivery fire,5/6,2026-09-21T19:12:00.000+03:00
+2026-09-21|358401234570,2026-09-21,Mon,Sofia Berg,358401234570,net profit,10,,1,,goal_set,,,2026-09-21T08:30:00.000+03:00
