@@ -1,6 +1,6 @@
 {
   "id": "whatsappCoach",
-  "name": "Coach - WhatsApp daily check-in",
+  "name": "Coach - a daily check-in on Telegram",
   "nodes": [
     {
       "parameters": {

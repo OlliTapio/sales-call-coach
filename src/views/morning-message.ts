@@ -1,4 +1,4 @@
-/** @file The morning WhatsApp text: two numbers and one focus, nothing to read past breakfast. */
+/** @file The morning Telegram text: two numbers and one focus, nothing to read past breakfast. */
 import type { DayRow } from '../domain/model.ts';
 
 const firstName = (name: string): string => name.split(/\s+/)[0] ?? name;

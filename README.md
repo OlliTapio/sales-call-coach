@@ -9,7 +9,16 @@ One workflow, one agent, many people. Three things, deliberately — set the goa
 record the day, coach. Scoring, scorecards and nudges are listed as TODO on the
 canvas and are not built here.
 
-Import `workflow.json`, fill in three placeholders, done. Nineteen nodes across
+**The name says WhatsApp because it started there.** It moved over one
+constraint: WhatsApp's free-text window closes 24 hours after someone's last
+message, and the person this workflow most needs to reach is the one who has not
+replied — which makes _Chasing the quiet_, on the TODO list below, unbuildable
+without paid template messages. Getting started also wanted a Meta business
+portfolio and capped the free test number at five recipients. Telegram has no
+messaging window, no recipient cap and no verification. The swap cost one file in
+`src/adapters/`, which is what that layer is for.
+
+Import `workflow.json`, fill in two placeholders, done. Nineteen nodes across
 three lanes on one canvas, plus five sticky notes.
 
 ![The workflow on the n8n canvas: three lanes — goals, check-in, coach — with the

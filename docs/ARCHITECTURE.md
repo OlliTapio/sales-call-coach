@@ -5,7 +5,7 @@ two of those nodes are **Code nodes**, and their bodies are compiled from `src/`
 Everything else in the repo exists to keep those two halves correct and in step.
 
 ```
-workflow.json            orchestration: triggers, Sheets, WhatsApp, LLM, routing
+workflow.json            orchestration: triggers, Sheets, Telegram, LLM, routing
   └─ Code node bodies  ← npm run build ← src/nodes/*.ts
 ```
 
@@ -19,9 +19,9 @@ src/nodes/      Controllers. One file per Code node, exporting main(). Reads
    │            $input / $() via adapters, calls domain + views, returns items.
    │
    ├─ src/n8n/      The n8n boundary: ambient global types, the Item shape, localNow().
-   ├─ src/adapters/ Raw JSON (Sheets rows, WhatsApp webhooks) → domain types. Total
+   ├─ src/adapters/ Raw JSON (Sheets rows, Telegram updates) → domain types. Total
    │                functions: bad input becomes null or a default, never a throw.
-   ├─ src/views/    Presentation: the WhatsApp message text.
+   ├─ src/views/    Presentation: the Telegram message text.
    └─ src/domain/   Business rules: goal rows, the anchored check-in parser, day
          │          keys and rollover. Pure; time arrives as an Instant parameter.
          └─ src/shared/  Config constants, coercions, branded Phone, collection helpers.
