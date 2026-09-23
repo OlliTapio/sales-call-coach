@@ -1,0 +1,27 @@
+# Git hooks for everyone, human or agent. `npm install` installs them.
+pre-commit:
+  piped: true
+  jobs:
+    - name: prettier
+      glob:
+        - '*.{ts,json,md,yml,yaml}'
+        - '**/*.{ts,json,md,yml,yaml}'
+      exclude:
+        - workflow.json
+        - package-lock.json
+      run: npx prettier --write --log-level=warn {staged_files}
+      stage_fixed: true
+    - name: eslint
+      glob:
+        - '*.ts'
+        - '**/*.ts'
+      run: npx eslint --max-warnings=0 {staged_files}
+    - name: workflow.json in sync with src/nodes
+      run: npm run -s build -- --check
+    - name: workflow lint
+      run: npm run -s lint:workflow
+
+pre-push:
+  jobs:
+    - name: npm run check
+      run: npm run -s check

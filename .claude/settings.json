@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/git-gate.ts\"",
-            "timeout": 600
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/no-verify.ts\"",
+            "timeout": 30
           }
         ]
       },

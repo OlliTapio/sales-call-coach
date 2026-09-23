@@ -14,7 +14,7 @@
     "knip": "knip",
     "check:fast": "npm run typecheck && npm run lint && npm run lint:workflow && npm run build -- --check && vitest run",
     "check": "npm run format:check && npm run typecheck && npm run lint && npm run lint:workflow && npm run build -- --check && npm test && npm run knip",
-    "prepare": "simple-git-hooks"
+    "prepare": "lefthook install"
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
@@ -28,10 +28,9 @@
     "eslint-plugin-functional": "10.0.1",
     "jiti": "2.7.0",
     "knip": "6.38.0",
-    "lint-staged": "17.5.1",
+    "lefthook": "2.1.14",
     "luxon": "^3.5.0",
     "prettier": "3.9.9",
-    "simple-git-hooks": "2.14.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
     "vitest": "5.0.1"
@@ -41,16 +40,5 @@
   },
   "engines": {
     "node": ">=24.2"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "npx lint-staged && npm run -s build -- --check && npm run -s lint:workflow",
-    "pre-push": "npm run -s check"
-  },
-  "lint-staged": {
-    "*.ts": [
-      "prettier --write",
-      "eslint --max-warnings=0"
-    ],
-    "*.{json,md,yml,yaml}": "prettier --write"
   }
 }

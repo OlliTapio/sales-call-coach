@@ -36,5 +36,7 @@ TypeScript in `src/`. Read `docs/ARCHITECTURE.md` before changing structure.
 
 - Node ≥ 24.2 (see `.nvmrc`). `tools/` and `.claude/hooks/` are `.ts` run directly by Node.
 - Windows and Linux both work. Line endings are LF (`.gitattributes`).
-- Hooks in `.claude/settings.json` gate `git commit`/`git push`, lint after each edit, and
-  run `check:fast` before a session ends. Their output is the fix list.
+- Git hooks (lefthook, `lefthook.yml`) check staged files on commit and run `check` on push.
+  Never pass `--no-verify`; a Claude hook refuses it.
+- Hooks in `.claude/settings.json` lint after each edit and run `check:fast` before a
+  session ends. Their output is the fix list.
