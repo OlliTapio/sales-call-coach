@@ -69,7 +69,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Generated from src/nodes/set-todays-goals.ts by `npm run build`. Edit the source, not this node.\n// src/shared/coerce.ts\nvar toText = (value) => {\n  if (typeof value === \"string\") return value;\n  if (typeof value === \"number\" || typeof value === \"boolean\") return String(value);\n  return \"\";\n};\nvar toTrimmed = (value) => toText(value).trim();\nvar toPhone = (value) => {\n  const digits = toText(value).replace(/\\D/g, \"\");\n  return digits === \"\" ? null : digits;\n};\nvar toNumberOrZero = (value) => {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : 0;\n};\nvar ACTIVE_WORDS = [\"true\", \"yes\", \"1\", \"x\"];\nvar isActive = (value) => ACTIVE_WORDS.includes(toTrimmed(value).toLowerCase());\n\n// src/adapters/sheets.ts\nvar parsePerson = (raw) => {\n  const phone = toPhone(raw[\"phone\"]);\n  if (phone === null) return null;\n  const name = toTrimmed(raw[\"name\"]);\n  return {\n    name: name === \"\" ? phone : name,\n    phone,\n    focus: toTrimmed(raw[\"focus\"]),\n    callsTarget: toNumberOrZero(raw[\"calls_target\"]),\n    hoursCap: toNumberOrZero(raw[\"hours_cap\"]),\n    active: isActive(raw[\"active\"])\n  };\n};\n\n// src/shared/config.ts\nvar ZONE = \"Europe/Helsinki\";\nvar DATE_FORMAT = \"yyyy-MM-dd\";\n\n// src/domain/day.ts\nvar dateKey = (day) => day.toFormat(DATE_FORMAT);\nvar weekdayLabel = (day) => day.toFormat(\"ccc\");\nvar rowKey = (day, phone) => `${dateKey(day)}|${phone}`;\n\n// src/domain/goal.ts\nvar goalRow = (person, now) => ({\n  key: rowKey(now, person.phone),\n  date: dateKey(now),\n  weekday: weekdayLabel(now),\n  name: person.name,\n  phone: person.phone,\n  focus: person.focus,\n  calls_target: person.callsTarget,\n  calls: \"\",\n  hours_cap: person.hoursCap,\n  hours: \"\",\n  status: \"goal_set\",\n  note: \"\",\n  raw_reply: \"\",\n  logged_at: now.toISO()\n});\n\n// src/n8n/clock.ts\nvar localNow = () => {\n  const now = $now.setZone(ZONE);\n  if (!now.isValid) throw new Error(`Cannot express $now in ${ZONE}: ${now.invalidReason}`);\n  return now;\n};\n\n// src/n8n/item.ts\nvar toItems = (rows) => rows.map((json) => ({ json }));\n\n// src/shared/collections.ts\nvar isPresent = (value) => value !== null && value !== void 0;\n\n// src/views/morning-message.ts\nvar firstName = (name) => name.split(/\\s+/)[0] ?? name;\nvar morningMessage = (row) => {\n  const calls = String(row.calls_target);\n  const hours = String(row.hours_cap);\n  const reminder = row.focus === \"\" ? \"\" : `\n\nFocus: *${row.focus}*.`;\n  return `Morning ${firstName(row.name)}. Today: *${calls} calls*, and stay under *${hours}h* on them.${reminder}\n\nTell me how it went tonight — \"${calls}/${hours}\" is enough, or just talk to me.`;\n};\n\n// src/nodes/set-todays-goals.ts\nvar main = () => {\n  const now = localNow();\n  const rows = $input.all().map((item) => parsePerson(item.json)).filter(isPresent).filter((person) => person.active).map((person) => goalRow(person, now));\n  return toItems(rows.map((row) => ({ ...row, message: morningMessage(row) })));\n};\nreturn main();"
+        "jsCode": "// Generated from src/nodes/set-todays-goals.ts by `npm run build`. Edit the source, not this node.\n// src/shared/coerce.ts\nvar toText = (value) => {\n  if (typeof value === \"string\") return value;\n  if (typeof value === \"number\" || typeof value === \"boolean\") return String(value);\n  return \"\";\n};\nvar toTrimmed = (value) => toText(value).trim();\nvar toChatId = (value) => {\n  const digits = toText(value).replace(/\\D/g, \"\");\n  return digits === \"\" ? null : digits;\n};\nvar toNumberOrZero = (value) => {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : 0;\n};\nvar ACTIVE_WORDS = [\"true\", \"yes\", \"1\", \"x\"];\nvar isActive = (value) => ACTIVE_WORDS.includes(toTrimmed(value).toLowerCase());\n\n// src/adapters/sheets.ts\nvar parsePerson = (raw) => {\n  const chatId = toChatId(raw[\"chat_id\"]);\n  if (chatId === null) return null;\n  const name = toTrimmed(raw[\"name\"]);\n  return {\n    name: name === \"\" ? chatId : name,\n    chatId,\n    focus: toTrimmed(raw[\"focus\"]),\n    callsTarget: toNumberOrZero(raw[\"calls_target\"]),\n    hoursCap: toNumberOrZero(raw[\"hours_cap\"]),\n    active: isActive(raw[\"active\"])\n  };\n};\n\n// src/shared/config.ts\nvar ZONE = \"Europe/Helsinki\";\nvar DATE_FORMAT = \"yyyy-MM-dd\";\n\n// src/domain/day.ts\nvar dateKey = (day) => day.toFormat(DATE_FORMAT);\nvar weekdayLabel = (day) => day.toFormat(\"ccc\");\nvar rowKey = (day, chatId) => `${dateKey(day)}|${chatId}`;\n\n// src/domain/goal.ts\nvar goalRow = (person, now) => ({\n  key: rowKey(now, person.chatId),\n  date: dateKey(now),\n  weekday: weekdayLabel(now),\n  name: person.name,\n  chat_id: person.chatId,\n  focus: person.focus,\n  calls_target: person.callsTarget,\n  calls: \"\",\n  hours_cap: person.hoursCap,\n  hours: \"\",\n  status: \"goal_set\",\n  note: \"\",\n  raw_reply: \"\",\n  logged_at: now.toISO()\n});\n\n// src/n8n/clock.ts\nvar localNow = () => {\n  const now = $now.setZone(ZONE);\n  if (!now.isValid) throw new Error(`Cannot express $now in ${ZONE}: ${now.invalidReason}`);\n  return now;\n};\n\n// src/n8n/item.ts\nvar toItems = (rows) => rows.map((json) => ({ json }));\n\n// src/shared/collections.ts\nvar isPresent = (value) => value !== null && value !== void 0;\n\n// src/views/morning-message.ts\nvar firstName = (name) => name.split(/\\s+/)[0] ?? name;\nvar morningMessage = (row) => {\n  const calls = String(row.calls_target);\n  const hours = String(row.hours_cap);\n  const reminder = row.focus === \"\" ? \"\" : `\n\nFocus: *${row.focus}*.`;\n  return `Morning ${firstName(row.name)}. Today: *${calls} calls*, and stay under *${hours}h* on them.${reminder}\n\nTell me how it went tonight — \"${calls}/${hours}\" is enough, or just talk to me.`;\n};\n\n// src/nodes/set-todays-goals.ts\nvar main = () => {\n  const now = localNow();\n  const rows = $input.all().map((item) => parsePerson(item.json)).filter(isPresent).filter((person) => person.active).map((person) => goalRow(person, now));\n  return toItems(rows.map((row) => ({ ...row, message: morningMessage(row) })));\n};\nreturn main();"
       },
       "id": "b7e10004-0000-4000-8000-000000000004",
       "name": "Set today's goals",
@@ -83,16 +83,18 @@
     {
       "parameters": {
         "resource": "message",
-        "operation": "send",
-        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $json.phone }}",
-        "messageType": "text",
-        "textBody": "={{ $json.message }}"
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "appendAttribution": false
+        }
       },
       "id": "b7e10005-0000-4000-8000-000000000005",
       "name": "Send the goals",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         400,
         40
@@ -118,7 +120,7 @@
             "date": "={{ $('Set today\\'s goals').item.json.date }}",
             "weekday": "={{ $('Set today\\'s goals').item.json.weekday }}",
             "name": "={{ $('Set today\\'s goals').item.json.name }}",
-            "phone": "={{ $('Set today\\'s goals').item.json.phone }}",
+            "chat_id": "={{ $('Set today\\'s goals').item.json.chat_id }}",
             "focus": "={{ $('Set today\\'s goals').item.json.focus }}",
             "calls_target": "={{ $('Set today\\'s goals').item.json.calls_target }}",
             "calls": "={{ $('Set today\\'s goals').item.json.calls }}",
@@ -171,20 +173,19 @@
     {
       "parameters": {
         "updates": [
-          "messages"
+          "message"
         ],
-        "options": {
-          "messageStatusUpdates": []
-        }
+        "additionalFields": {}
       },
       "id": "b7e10008-0000-4000-8000-000000000008",
-      "name": "WhatsApp Trigger",
-      "type": "n8n-nodes-base.whatsAppTrigger",
-      "typeVersion": 1,
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
       "position": [
         -260,
         560
-      ]
+      ],
+      "webhookId": "b7e10008-0000-4000-8000-000000000008"
     },
     {
       "parameters": {
@@ -198,7 +199,7 @@
           "conditions": [
             {
               "id": "b7e10009-0000-4000-8000-000000000009",
-              "leftValue": "={{ ($json.messages || []).filter(m => m.type === 'text').length }}",
+              "leftValue": "={{ typeof $json.message?.text === 'string' ? 1 : 0 }}",
               "operator": {
                 "type": "number",
                 "operation": "gt"
@@ -251,7 +252,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Generated from src/nodes/match-person-and-parse-reply.ts by `npm run build`. Edit the source, not this node.\n// src/shared/coerce.ts\nvar toText = (value) => {\n  if (typeof value === \"string\") return value;\n  if (typeof value === \"number\" || typeof value === \"boolean\") return String(value);\n  return \"\";\n};\nvar toTrimmed = (value) => toText(value).trim();\nvar toPhone = (value) => {\n  const digits = toText(value).replace(/\\D/g, \"\");\n  return digits === \"\" ? null : digits;\n};\nvar toNumberOrZero = (value) => {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : 0;\n};\nvar ACTIVE_WORDS = [\"true\", \"yes\", \"1\", \"x\"];\nvar isActive = (value) => ACTIVE_WORDS.includes(toTrimmed(value).toLowerCase());\n\n// src/adapters/sheets.ts\nvar parsePerson = (raw) => {\n  const phone = toPhone(raw[\"phone\"]);\n  if (phone === null) return null;\n  const name = toTrimmed(raw[\"name\"]);\n  return {\n    name: name === \"\" ? phone : name,\n    phone,\n    focus: toTrimmed(raw[\"focus\"]),\n    callsTarget: toNumberOrZero(raw[\"calls_target\"]),\n    hoursCap: toNumberOrZero(raw[\"hours_cap\"]),\n    active: isActive(raw[\"active\"])\n  };\n};\n\n// src/shared/collections.ts\nvar isPresent = (value) => value !== null && value !== void 0;\n\n// src/shared/config.ts\nvar ZONE = \"Europe/Helsinki\";\nvar DAY_ROLLOVER_HOUR = 4;\nvar DATE_FORMAT = \"yyyy-MM-dd\";\n\n// src/adapters/whatsapp.ts\nvar isRecord = (value) => typeof value === \"object\" && value !== null && !Array.isArray(value);\nvar receivedAt = (timestamp, fallback) => {\n  const seconds = Number(toText(timestamp));\n  const at = DateTime.fromSeconds(seconds).setZone(ZONE);\n  return Number.isFinite(seconds) && seconds > 0 && at.isValid ? at : fallback;\n};\nvar parseMessage = (message, now) => {\n  if (!isRecord(message) || message[\"type\"] !== \"text\") return null;\n  const phone = toPhone(message[\"from\"]);\n  if (phone === null) return null;\n  const text = message[\"text\"];\n  return {\n    id: toText(message[\"id\"]),\n    phone,\n    body: toTrimmed(isRecord(text) ? text[\"body\"] : \"\"),\n    receivedAt: receivedAt(message[\"timestamp\"], now)\n  };\n};\nvar parseInboundTexts = (event, now) => {\n  const messages = event[\"messages\"];\n  if (!Array.isArray(messages)) return [];\n  return messages.map((m) => parseMessage(m, now)).filter(isPresent);\n};\n\n// src/domain/day.ts\nvar reportingDay = (at) => at.hour < DAY_ROLLOVER_HOUR ? at.minus({ days: 1 }) : at;\nvar dateKey = (day) => day.toFormat(DATE_FORMAT);\nvar weekdayLabel = (day) => day.toFormat(\"ccc\");\nvar rowKey = (day, phone) => `${dateKey(day)}|${phone}`;\n\n// src/domain/reply.ts\nvar ALL_WORDS = [\"all\", \"all of them\", \"kaikki\"];\nvar NONE_WORDS = [\"none\", \"zero\", \"0\", \"en yhtään\"];\nvar MAX_CALLS = 100;\nvar MAX_HOURS = 18;\nvar PAIR = /^(\\d{1,3})\\s*[/-]\\s*(\\d{1,2}(?:[.,]\\d)?)\\s*h?$/;\nvar SINGLE = /^(\\d{1,3})\\s*(?:calls?|puhelua)?[.!]?$/;\nvar UNPARSED = { kind: \"unparsed\" };\nvar pair = (match) => {\n  const calls = Number(match[1]);\n  const hours = Number((match[2] ?? \"\").replace(\",\", \".\"));\n  return calls <= MAX_CALLS && hours <= MAX_HOURS ? { kind: \"calls+hours\", calls, hours } : UNPARSED;\n};\nvar single = (match) => {\n  const calls = Number(match[1]);\n  return calls <= MAX_CALLS ? { kind: \"calls\", calls, hours: null } : UNPARSED;\n};\nvar parseCheckIn = (text, callsTarget) => {\n  const clean = text.trim().toLowerCase();\n  if (ALL_WORDS.includes(clean)) return { kind: \"all\", calls: callsTarget, hours: null };\n  if (NONE_WORDS.includes(clean)) return { kind: \"none\", calls: 0, hours: null };\n  const pairMatch = PAIR.exec(clean);\n  if (pairMatch !== null) return pair(pairMatch);\n  const singleMatch = SINGLE.exec(clean);\n  return singleMatch === null ? UNPARSED : single(singleMatch);\n};\nvar replyRow = (person, message) => {\n  const day = reportingDay(message.receivedAt);\n  const result = parseCheckIn(message.body, person.callsTarget);\n  const parsed = result.kind !== \"unparsed\";\n  return {\n    key: rowKey(day, person.phone),\n    date: dateKey(day),\n    weekday: weekdayLabel(day),\n    name: person.name,\n    phone: person.phone,\n    focus: person.focus,\n    calls_target: person.callsTarget,\n    calls: parsed ? result.calls : \"\",\n    hours_cap: person.hoursCap,\n    hours: parsed ? result.hours ?? \"\" : \"\",\n    status: parsed ? \"logged\" : \"unparsed\",\n    note: result.kind,\n    raw_reply: message.body,\n    logged_at: message.receivedAt.toISO(),\n    parsed,\n    message_id: message.id\n  };\n};\nvar replyRows = (people, messages) => {\n  const byPhone = new Map(people.map((person) => [person.phone, person]));\n  return messages.flatMap((message) => {\n    const person = byPhone.get(message.phone);\n    return person === void 0 ? [] : [replyRow(person, message)];\n  });\n};\n\n// src/n8n/clock.ts\nvar localNow = () => {\n  const now = $now.setZone(ZONE);\n  if (!now.isValid) throw new Error(`Cannot express $now in ${ZONE}: ${now.invalidReason}`);\n  return now;\n};\n\n// src/n8n/item.ts\nvar toItems = (rows) => rows.map((json) => ({ json }));\n\n// src/nodes/match-person-and-parse-reply.ts\nvar main = () => {\n  const now = localNow();\n  const people = $input.all().map((item) => parsePerson(item.json)).filter(isPresent);\n  const messages = $(\"WhatsApp Trigger\").all().flatMap((event) => parseInboundTexts(event.json, now));\n  return toItems(replyRows(people, messages));\n};\nreturn main();"
+        "jsCode": "// Generated from src/nodes/match-person-and-parse-reply.ts by `npm run build`. Edit the source, not this node.\n// src/shared/coerce.ts\nvar toText = (value) => {\n  if (typeof value === \"string\") return value;\n  if (typeof value === \"number\" || typeof value === \"boolean\") return String(value);\n  return \"\";\n};\nvar toTrimmed = (value) => toText(value).trim();\nvar toChatId = (value) => {\n  const digits = toText(value).replace(/\\D/g, \"\");\n  return digits === \"\" ? null : digits;\n};\nvar toNumberOrZero = (value) => {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : 0;\n};\nvar ACTIVE_WORDS = [\"true\", \"yes\", \"1\", \"x\"];\nvar isActive = (value) => ACTIVE_WORDS.includes(toTrimmed(value).toLowerCase());\n\n// src/adapters/sheets.ts\nvar parsePerson = (raw) => {\n  const chatId = toChatId(raw[\"chat_id\"]);\n  if (chatId === null) return null;\n  const name = toTrimmed(raw[\"name\"]);\n  return {\n    name: name === \"\" ? chatId : name,\n    chatId,\n    focus: toTrimmed(raw[\"focus\"]),\n    callsTarget: toNumberOrZero(raw[\"calls_target\"]),\n    hoursCap: toNumberOrZero(raw[\"hours_cap\"]),\n    active: isActive(raw[\"active\"])\n  };\n};\n\n// src/shared/config.ts\nvar ZONE = \"Europe/Helsinki\";\nvar DAY_ROLLOVER_HOUR = 4;\nvar DATE_FORMAT = \"yyyy-MM-dd\";\n\n// src/adapters/telegram.ts\nvar isRecord = (value) => typeof value === \"object\" && value !== null && !Array.isArray(value);\nvar receivedAt = (date, fallback) => {\n  const seconds = Number(toText(date));\n  const at = DateTime.fromSeconds(seconds).setZone(ZONE);\n  return Number.isFinite(seconds) && seconds > 0 && at.isValid ? at : fallback;\n};\nvar parseInboundTexts = (event, now) => {\n  const message = event[\"message\"];\n  if (!isRecord(message)) return [];\n  const body = message[\"text\"];\n  if (typeof body !== \"string\") return [];\n  const chat = message[\"chat\"];\n  const chatId = toChatId(isRecord(chat) ? chat[\"id\"] : null);\n  if (chatId === null) return [];\n  return [\n    {\n      id: toText(message[\"message_id\"]),\n      chatId,\n      body: toTrimmed(body),\n      receivedAt: receivedAt(message[\"date\"], now)\n    }\n  ];\n};\n\n// src/domain/day.ts\nvar reportingDay = (at) => at.hour < DAY_ROLLOVER_HOUR ? at.minus({ days: 1 }) : at;\nvar dateKey = (day) => day.toFormat(DATE_FORMAT);\nvar weekdayLabel = (day) => day.toFormat(\"ccc\");\nvar rowKey = (day, chatId) => `${dateKey(day)}|${chatId}`;\n\n// src/domain/reply.ts\nvar ALL_WORDS = [\"all\", \"all of them\", \"kaikki\"];\nvar NONE_WORDS = [\"none\", \"zero\", \"0\", \"en yhtään\"];\nvar MAX_CALLS = 100;\nvar MAX_HOURS = 18;\nvar PAIR = /^(\\d{1,3})\\s*[/-]\\s*(\\d{1,2}(?:[.,]\\d)?)\\s*h?$/;\nvar SINGLE = /^(\\d{1,3})\\s*(?:calls?|puhelua)?[.!]?$/;\nvar UNPARSED = { kind: \"unparsed\" };\nvar pair = (match) => {\n  const calls = Number(match[1]);\n  const hours = Number((match[2] ?? \"\").replace(\",\", \".\"));\n  return calls <= MAX_CALLS && hours <= MAX_HOURS ? { kind: \"calls+hours\", calls, hours } : UNPARSED;\n};\nvar single = (match) => {\n  const calls = Number(match[1]);\n  return calls <= MAX_CALLS ? { kind: \"calls\", calls, hours: null } : UNPARSED;\n};\nvar parseCheckIn = (text, callsTarget) => {\n  const clean = text.trim().toLowerCase();\n  if (ALL_WORDS.includes(clean)) return { kind: \"all\", calls: callsTarget, hours: null };\n  if (NONE_WORDS.includes(clean)) return { kind: \"none\", calls: 0, hours: null };\n  const pairMatch = PAIR.exec(clean);\n  if (pairMatch !== null) return pair(pairMatch);\n  const singleMatch = SINGLE.exec(clean);\n  return singleMatch === null ? UNPARSED : single(singleMatch);\n};\nvar replyRow = (person, message) => {\n  const day = reportingDay(message.receivedAt);\n  const result = parseCheckIn(message.body, person.callsTarget);\n  const parsed = result.kind !== \"unparsed\";\n  return {\n    key: rowKey(day, person.chatId),\n    date: dateKey(day),\n    weekday: weekdayLabel(day),\n    name: person.name,\n    chat_id: person.chatId,\n    focus: person.focus,\n    calls_target: person.callsTarget,\n    calls: parsed ? result.calls : \"\",\n    hours_cap: person.hoursCap,\n    hours: parsed ? result.hours ?? \"\" : \"\",\n    status: parsed ? \"logged\" : \"unparsed\",\n    note: result.kind,\n    raw_reply: message.body,\n    logged_at: message.receivedAt.toISO(),\n    parsed,\n    message_id: message.id\n  };\n};\nvar replyRows = (people, messages) => {\n  const byChatId = new Map(people.map((person) => [person.chatId, person]));\n  return messages.flatMap((message) => {\n    const person = byChatId.get(message.chatId);\n    return person === void 0 ? [] : [replyRow(person, message)];\n  });\n};\n\n// src/n8n/clock.ts\nvar localNow = () => {\n  const now = $now.setZone(ZONE);\n  if (!now.isValid) throw new Error(`Cannot express $now in ${ZONE}: ${now.invalidReason}`);\n  return now;\n};\n\n// src/n8n/item.ts\nvar toItems = (rows) => rows.map((json) => ({ json }));\n\n// src/shared/collections.ts\nvar isPresent = (value) => value !== null && value !== void 0;\n\n// src/nodes/match-person-and-parse-reply.ts\nvar main = () => {\n  const now = localNow();\n  const people = $input.all().map((item) => parsePerson(item.json)).filter(isPresent);\n  const messages = $(\"Telegram Trigger\").all().flatMap((event) => parseInboundTexts(event.json, now));\n  return toItems(replyRows(people, messages));\n};\nreturn main();"
       },
       "id": "b7e10012-0000-4000-8000-000000000012",
       "name": "Match person & parse reply",
@@ -316,7 +317,7 @@
             "date": "={{ $json.date }}",
             "weekday": "={{ $json.weekday }}",
             "name": "={{ $json.name }}",
-            "phone": "={{ $json.phone }}",
+            "chat_id": "={{ $json.chat_id }}",
             "focus": "={{ $json.focus }}",
             "calls_target": "={{ $json.calls_target }}",
             "calls": "={{ $json.calls }}",
@@ -353,16 +354,17 @@
     {
       "parameters": {
         "resource": "message",
-        "operation": "send",
-        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Did the regex read it?').item.json.phone }}",
-        "messageType": "text",
-        "textBody": "=Logged {{ $('Did the regex read it?').item.json.calls }}/{{ $('Did the regex read it?').item.json.calls_target }} calls{{ $('Did the regex read it?').item.json.hours === '' ? '' : ', ' + $('Did the regex read it?').item.json.hours + 'h of ' + $('Did the regex read it?').item.json.hours_cap + 'h' }}. {{ Number($('Did the regex read it?').item.json.calls) >= Number($('Did the regex read it?').item.json.calls_target) ? 'Target hit.' : (Number($('Did the regex read it?').item.json.calls_target) - Number($('Did the regex read it?').item.json.calls)) + ' short.' }}"
+        "operation": "sendMessage",
+        "chatId": "={{ $('Did the regex read it?').item.json.chat_id }}",
+        "text": "=Logged {{ $('Did the regex read it?').item.json.calls }}/{{ $('Did the regex read it?').item.json.calls_target }} calls{{ $('Did the regex read it?').item.json.hours === '' ? '' : ', ' + $('Did the regex read it?').item.json.hours + 'h of ' + $('Did the regex read it?').item.json.hours_cap + 'h' }}. {{ Number($('Did the regex read it?').item.json.calls) >= Number($('Did the regex read it?').item.json.calls_target) ? 'Target hit.' : (Number($('Did the regex read it?').item.json.calls_target) - Number($('Did the regex read it?').item.json.calls)) + ' short.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "b7e10016-0000-4000-8000-000000000016",
       "name": "Confirm it landed",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1080,
         460
@@ -370,7 +372,7 @@
     },
     {
       "parameters": {
-        "content": "## 3 · Coach\nOne agent for everyone on the list. It logs what the person actually said and coaches from the Notion playbook library — and from nothing else. It cannot set a goal, move a target or quote a number that is not in a playbook row. If Anthropic is down the person is asked for a plain number instead, which lane 2 can still log.",
+        "content": "## 3 · Coach\nOne agent for everyone on the list. It logs what the person actually said and coaches from the Notion playbook library — and from nothing else. It cannot set a goal, move a target or quote a number that is not in a playbook row. If the model is down the person is asked for a plain number instead, which lane 2 can still log. If Notion is down the reply loses its citation, not its answer.",
         "width": 1100,
         "height": 200,
         "color": 6
@@ -387,11 +389,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Person: {{ $json.name }} ({{ $json.phone }})\nToday is {{ $json.weekday }} {{ $json.date }}. Today's goals: {{ $json.calls_target }} calls, under {{ $json.hours_cap }}h on them.\nTheir current focus: {{ $json.focus }}\nLog row key: {{ $json.key }}\n\nThey said: {{ $json.raw_reply }}",
+        "text": "=Person: {{ $json.name }} ({{ $json.chat_id }})\nToday is {{ $json.weekday }} {{ $json.date }}. Today's goals: {{ $json.calls_target }} calls, under {{ $json.hours_cap }}h on them.\nTheir current focus: {{ $json.focus }}\nLog row key: {{ $json.key }}\n\nThey said: {{ $json.raw_reply }}",
         "hasOutputParser": false,
         "needsFallback": false,
         "options": {
-          "systemMessage": "You are a coach, messaging one of the people you work with on WhatsApp. You have two jobs.\n\n1. Log the day. If the message says how many calls they held or how many hours they spent, call log_the_day with exactly those numbers. Never guess one they did not give — leave it out. Say what you logged.\n\n2. Coach. Use read_the_playbooks to find tasks whose Focus matches theirs, and name at most one, with the playbook it comes from. Coach on behaviour, cadence and what to stop doing.\n\nHard limits. Never state a price, a policy, a target or a number that is not in the prompt or in a playbook row you just read. If they ask for one you do not have, say you do not have it and tell them to raise it with whoever set their goals. Never set or change a goal yourself.\n\nYou coach several people. Nothing one person tells you may appear in a reply to anyone else.\n\nReply in at most 60 words. No emoji, no greeting, no sign-off, no links, no bullet lists — plain sentences someone reads on a phone.",
+          "systemMessage": "You are a coach, messaging one of the people you work with on Telegram. You have two jobs.\n\n1. Log the day. If the message says how many calls they held or how many hours they spent, call log_the_day with exactly those numbers. Never guess one they did not give — leave it out. Say what you logged.\n\n2. Coach. Use read_the_playbooks to find tasks whose Focus matches theirs, and name at most one, with the playbook it comes from. Coach on behaviour, cadence and what to stop doing. If read_the_playbooks returns nothing, fails, or holds no row matching their focus, say you have no playbook to hand today and coach from what they told you — never invent a task or a playbook name.\n\nHard limits. Never state a price, a policy, a target or a number that is not in the prompt or in a playbook row you just read. If they ask for one you do not have, say you do not have it and tell them to raise it with whoever set their goals. Never set or change a goal yourself.\n\nYou coach several people. Nothing one person tells you may appear in a reply to anyone else.\n\nReply in at most 60 words. No emoji, no greeting, no sign-off, no links, no bullet lists — plain sentences someone reads on a phone.",
           "maxIterations": 6,
           "enableStreaming": false
         }
@@ -411,22 +413,15 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "list",
-          "value": "claude-sonnet-5",
-          "cachedResultName": "Claude Sonnet 5"
-        },
+        "modelName": "models/gemini-3.1-pro-preview",
         "options": {
-          "maxTokensToSample": 1024,
-          "thinkingMode": "adaptive",
-          "effort": "low"
+          "maxOutputTokens": 1024
         }
       },
       "id": "b7e10019-0000-4000-8000-000000000019",
-      "name": "Claude",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.6,
+      "name": "Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
       "position": [
         700,
         1080
@@ -435,7 +430,7 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $json.phone }}",
+        "sessionKey": "={{ $json.chat_id }}",
         "contextWindowLength": 6
       },
       "id": "b7e10020-0000-4000-8000-000000000020",
@@ -469,7 +464,7 @@
             "date": "={{ $json.date }}",
             "weekday": "={{ $json.weekday }}",
             "name": "={{ $json.name }}",
-            "phone": "={{ $json.phone }}",
+            "chat_id": "={{ $json.chat_id }}",
             "focus": "={{ $json.focus }}",
             "calls_target": "={{ $json.calls_target }}",
             "calls": "={{ $fromAI('calls', 'How many calls the person says they held today. Omit if they did not say.', 'number') }}",
@@ -555,16 +550,17 @@
     {
       "parameters": {
         "resource": "message",
-        "operation": "send",
-        "phoneNumberId": "REPLACE_WITH_PHONE_NUMBER_ID",
-        "recipientPhoneNumber": "={{ $('Match person & parse reply').item.json.phone }}",
-        "messageType": "text",
-        "textBody": "={{ $json.message }}"
+        "operation": "sendMessage",
+        "chatId": "={{ $('Match person & parse reply').item.json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "b7e10025-0000-4000-8000-000000000025",
       "name": "Send the coach reply",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         800
@@ -588,7 +584,7 @@
     },
     {
       "parameters": {
-        "content": "## TODO\nNot built, deliberately — this canvas is the daily loop only.\n\n- **Weekly scoring.** Each focus against its target, in a Code node so the scoring stays deterministic.\n- **One focus at a time.** When several things are off target, name one and queue the rest.\n- **Friday scorecard.** The week as a chart, to the person and to whoever coaches them.\n- **Chase the quiet.** A nudge for anyone who never replied, respecting the WhatsApp 24-hour window.\n- **Call them, don't only text (ElevenLabs).** A ringing phone is a different kind of interrupt from a message that sits unread all evening. An ElevenLabs voice agent could place the nudge as an outbound call and take the number by voice. It also sidesteps the WhatsApp 24-hour window, which governs WhatsApp messages and not calls — at the cost of needing explicit consent to ring someone, which the `People` sheet would have to record and honour.\n- **Evals.** Groundedness and logging accuracy on the coach reply, before any of the above.",
+        "content": "## TODO\nNot built, deliberately — this canvas is the daily loop only.\n\n- **Weekly scoring.** Each focus against its target, in a Code node so the scoring stays deterministic.\n- **One focus at a time.** When several things are off target, name one and queue the rest.\n- **Friday scorecard.** The week as a chart, to the person and to whoever coaches them.\n- **Chase the quiet.** A nudge for anyone who never replied. Telegram has no 24-hour messaging window, so only the schedule is missing.\n- **Call them, don't only text (ElevenLabs).** A ringing phone is a different kind of interrupt from a message that sits unread all evening. An ElevenLabs voice agent could place the nudge as an outbound call and take the number by voice. — at the cost of needing explicit consent to ring someone, which the `People` sheet would have to record and honour.\n- **Evals.** Groundedness and logging accuracy on the coach reply, before any of the above.",
         "width": 460,
         "height": 800,
         "color": 7
@@ -648,7 +644,7 @@
         ]
       ]
     },
-    "WhatsApp Trigger": {
+    "Telegram Trigger": {
       "main": [
         [
           {
@@ -750,7 +746,7 @@
         ]
       ]
     },
-    "Claude": {
+    "Gemini": {
       "ai_languageModel": [
         [
           {
@@ -804,7 +800,7 @@
     "Get the people": [
       {
         "name": "Anna Virtanen",
-        "phone": 358401234567,
+        "chat_id": 610044521,
         "calls_target": 8,
         "hours_cap": 2,
         "focus": "close rate",
@@ -813,7 +809,7 @@
       },
       {
         "name": "Mikko Laine",
-        "phone": 358401234568,
+        "chat_id": 610044522,
         "calls_target": 5,
         "hours_cap": 3,
         "focus": "founder hours",
@@ -822,7 +818,7 @@
       },
       {
         "name": "Sofia Berg",
-        "phone": 358401234570,
+        "chat_id": 610044524,
         "calls_target": 10,
         "hours_cap": 1,
         "focus": "net profit",

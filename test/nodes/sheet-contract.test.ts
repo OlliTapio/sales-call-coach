@@ -15,7 +15,7 @@ const [, run] = RUNNERS[0] ?? [];
 const now = at('2026-09-21T19:00:00');
 const person = {
   name: 'Anna',
-  phone: '358401234567',
+  chat_id: 610044521,
   calls_target: 8,
   hours_cap: 2,
   focus: 'x',
@@ -31,11 +31,11 @@ test('a goal row carries exactly the Days columns, plus the message', () => {
 });
 
 test('a reply row carries exactly the Days columns, plus routing fields', () => {
-  const event = { messages: [{ from: person.phone, type: 'text', text: { body: '6' } }] };
+  const event = { message: { chat: { id: person.chat_id }, text: '6' } };
   const [row] =
     run?.('Match person & parse reply', {
       items: [person],
-      nodes: { 'WhatsApp Trigger': [event] },
+      nodes: { 'Telegram Trigger': [event] },
       now,
     }) ?? [];
   expect(columns(row)).toEqual(header('Days'));
@@ -43,7 +43,7 @@ test('a reply row carries exactly the Days columns, plus routing fields', () => 
 
 test('the People tab carries every column the adapter reads', () => {
   expect(header('People')).toEqual(
-    expect.arrayContaining(['name', 'phone', 'calls_target', 'hours_cap', 'focus', 'active']),
+    expect.arrayContaining(['name', 'chat_id', 'calls_target', 'hours_cap', 'focus', 'active']),
   );
 });
 

@@ -48,15 +48,15 @@ const TERNARY = "={{ $json.a ? 'x' : 'y' }}";
 
 const BROKEN: readonly (readonly [string, Workflow, string?])[] = [
   ['has-workflow-id', { ...WORKFLOW, id: undefined }],
-  ['unique-names-and-ids', set(WORKFLOW, 'Claude', 'name', 'Coach')],
+  ['unique-names-and-ids', set(WORKFLOW, 'Gemini', 'name', 'Coach')],
   ['connections-resolve', rewire(WORKFLOW, 'Ghost', [['Nobody']])],
   ['node-refs-resolve', setParam(WORKFLOW, 'Send the goals', 'textBody', "={{ $('Gone').x }}")],
   ['no-orphans', disconnect(WORKFLOW, 'Send the goals')],
   ['balanced-expressions', setParam(WORKFLOW, 'Send the goals', 'textBody', '={{ $json.x ')],
   ['expression-complexity', setParam(WORKFLOW, 'Send the goals', 'textBody', TERNARY)],
   ['expression-complexity', setParam(WORKFLOW, TIDY, 'assignments', {}), 'Listed as an exception'],
-  ['no-credentials-exported', set(WORKFLOW, 'Claude', 'credentials', { anthropicApi: {} })],
-  ['no-hardcoded-targets', setParam(WORKFLOW, 'Send the goals', 'phoneNumberId', '1234567')],
+  ['no-credentials-exported', set(WORKFLOW, 'Gemini', 'credentials', { googlePalmApi: {} })],
+  ['no-hardcoded-targets', setParam(WORKFLOW, 'Send the goals', 'chatId', '1234567')],
   ['no-default-node-names', set(WORKFLOW, TIDY, 'name', 'Edit Fields1')],
   ['code-nodes-are-generated', setParam(WORKFLOW, GOALS, 'jsCode', 'return [];')],
   ['code-nodes-are-generated', without(WORKFLOW, GOALS)],
@@ -88,10 +88,10 @@ const BROKEN: readonly (readonly [string, Workflow, string?])[] = [
   ['agent-degrades', setParam(WORKFLOW, TIDY, 'assignments', { assignments: [] })],
   ['playbooks-read-whole', setParam(WORKFLOW, 'read_the_playbooks', 'returnAll', false)],
   ['reply-lane-hygiene', set(WORKFLOW, 'Get the people (reply)', 'executeOnce', false)],
-  ['reply-lane-hygiene', setParam(WORKFLOW, 'WhatsApp Trigger', 'options', {})],
+  ['reply-lane-hygiene', setParam(WORKFLOW, 'Telegram Trigger', 'updates', [])],
   [
     'placeholders-match-readme',
-    setParam(WORKFLOW, 'Send the goals', 'phoneNumberId', 'REPLACE_WITH_SOMETHING'),
+    setParam(WORKFLOW, 'Get the people', 'documentId', { value: 'REPLACE_WITH_SOMETHING' }),
   ],
   [
     'placeholders-match-readme',

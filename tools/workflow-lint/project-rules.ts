@@ -67,9 +67,9 @@ const agentCluster: Rule = {
     const tools = attachedTo(wf, 'Coach', 'ai_tool');
     return [
       ...cluster.that(
-        same(attachedTo(wf, 'Coach', 'ai_languageModel'), ['Claude']),
+        same(attachedTo(wf, 'Coach', 'ai_languageModel'), ['Gemini']),
         'Coach',
-        'Coach needs exactly one model: Claude.',
+        'Coach needs exactly one model: Gemini.',
       ),
       ...cluster.that(
         same(attachedTo(wf, 'Coach', 'ai_memory'), ['Remember the thread']),
@@ -88,9 +88,9 @@ const agentCluster: Rule = {
         ),
       ...cluster.setting(wf, 'Remember the thread', 'sessionIdType', 'customKey'),
       ...cluster.that(
-        String(setting(wf, 'Remember the thread', 'sessionKey')).includes('$json.phone'),
+        String(setting(wf, 'Remember the thread', 'sessionKey')).includes('$json.chat_id'),
         'Remember the thread',
-        'Memory must be keyed per person ($json.phone), not shared.',
+        'Memory must be keyed per person ($json.chat_id), not shared.',
       ),
       ...cluster.setting(wf, 'Coach', 'options.enableStreaming', false),
     ];
@@ -135,8 +135,7 @@ const replyLaneHygiene: Rule = {
   id: 'reply-lane-hygiene',
   check: (wf) => [
     ...hygiene.setting(wf, 'Get the people (reply)', 'executeOnce', true),
-    ...hygiene.setting(wf, 'WhatsApp Trigger', 'updates', ['messages']),
-    ...hygiene.setting(wf, 'WhatsApp Trigger', 'options.messageStatusUpdates', []),
+    ...hygiene.setting(wf, 'Telegram Trigger', 'updates', ['message']),
   ],
 };
 

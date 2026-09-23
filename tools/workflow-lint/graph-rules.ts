@@ -2,7 +2,7 @@
 import type { WorkflowNode } from '../build/workflow-file.ts';
 import { eachNode, finding, type Rule } from './rule.ts';
 
-const TRIGGERS = new Set(['n8n-nodes-base.scheduleTrigger', 'n8n-nodes-base.whatsAppTrigger']);
+const TRIGGERS = new Set(['n8n-nodes-base.scheduleTrigger', 'n8n-nodes-base.telegramTrigger']);
 const STICKY = 'n8n-nodes-base.stickyNote';
 const MAX_STICKY_GAP = 400;
 

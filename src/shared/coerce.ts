@@ -1,6 +1,6 @@
 /** @file Total functions from untyped sheet or webhook cells to plain values. */
 
-export type Phone = string & { readonly __brand: 'Phone' };
+export type ChatId = string & { readonly __brand: 'ChatId' };
 
 export const toText = (value: unknown): string => {
   if (typeof value === 'string') return value;
@@ -10,11 +10,11 @@ export const toText = (value: unknown): string => {
 
 export const toTrimmed = (value: unknown): string => toText(value).trim();
 
-/** Sheets hands numbers back with or without a `+`; WhatsApp reports bare digits. */
-export const toPhone = (value: unknown): Phone | null => {
+/** Sheets may hand the id back as a number; Telegram reports it as one. Digits only. */
+export const toChatId = (value: unknown): ChatId | null => {
   const digits = toText(value).replace(/\D/g, '');
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- brand constructor
-  return digits === '' ? null : (digits as Phone);
+  return digits === '' ? null : (digits as ChatId);
 };
 
 /** A blank or junk cell reads as 0, the way `Number(cell) || 0` did. */

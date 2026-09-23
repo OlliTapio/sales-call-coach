@@ -1,5 +1,5 @@
-/** @file The `date|phone` key every lane writes to, and which day a moment counts for. */
-import type { Phone } from '../shared/coerce.ts';
+/** @file The `date|chat_id` key every lane writes to, and which day a moment counts for. */
+import type { ChatId } from '../shared/coerce.ts';
 import { DATE_FORMAT, DAY_ROLLOVER_HOUR } from '../shared/config.ts';
 import type { Instant } from '../shared/time.ts';
 
@@ -11,4 +11,4 @@ export const dateKey = (day: Instant): string => day.toFormat(DATE_FORMAT);
 
 export const weekdayLabel = (day: Instant): string => day.toFormat('ccc');
 
-export const rowKey = (day: Instant, phone: Phone): string => `${dateKey(day)}|${phone}`;
+export const rowKey = (day: Instant, chatId: ChatId): string => `${dateKey(day)}|${chatId}`;

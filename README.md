@@ -1,6 +1,6 @@
-# Coach — a daily check-in on WhatsApp
+# Coach — a daily check-in on Telegram
 
-An n8n workflow that coaches a group of people through WhatsApp. Every weekday
+An n8n workflow that coaches a group of people through Telegram. Every weekday
 morning it sends each person the two numbers they committed to and the one thing
 they are working on; in the evening it records what actually happened; and in
 between it answers whatever they send back.
@@ -28,7 +28,7 @@ the rows marked active, and sends each person two numbers and their focus. The
 numbers come off their row; nothing is generated. The day's row goes to `Days`
 with `status = goal_set` and **empty** `calls` and `hours` cells.
 
-**2 · Check-in** — the WhatsApp Trigger fires on the reply. `6`, `6/3`, `all`
+**2 · Check-in** — the Telegram Trigger fires on the reply. `6`, `6/3`, `all`
 and `none` are read by a regex, written straight to the sheet, and confirmed in
 one line. No model is involved, and no model _can_ be: **Record the day** has
 exactly one node feeding it, and it is the IF.
@@ -36,7 +36,7 @@ exactly one node feeding it, and it is the IF.
 **3 · Coach** — everything the regex refused goes to one agent with two tools. It
 can write that person's numbers into the log (`log_the_day`) and read the Notion
 playbook library (`read_the_playbooks`), and that is the whole of its reach. It
-answers, coaches, and names at most one task to do next. If Anthropic is down the
+answers, coaches, and names at most one task to do next. If the model is down the
 person is asked for a plain number instead — which lane 2 can still log.
 
 ## The spreadsheet
@@ -44,13 +44,14 @@ person is asked for a plain number instead — which lane 2 can still log.
 One Google Sheet, two tabs. `sheets/*.csv` has the headers and some sample rows —
 import each one as a tab of the same name, or paste the header row in by hand.
 
-| Tab      | What it holds                                                                | You edit                           |
-| -------- | ---------------------------------------------------------------------------- | ---------------------------------- |
-| `People` | `name`, `phone`, `calls_target`, `hours_cap`, `focus`, `goal_text`, `active` | yes — the only tab a human touches |
-| `Days`   | one row per person per day, upserted on `key` (`date` + `phone`)             | no                                 |
+| Tab      | What it holds                                                                  | You edit                           |
+| -------- | ------------------------------------------------------------------------------ | ---------------------------------- |
+| `People` | `name`, `chat_id`, `calls_target`, `hours_cap`, `focus`, `goal_text`, `active` | yes — the only tab a human touches |
+| `Days`   | one row per person per day, upserted on `key` (`date` + `chat_id`)             | no                                 |
 
-Phone numbers go in in international form without the `+` (`358401234567`); the
-workflow strips anything else. `active` accepts `TRUE`, `yes`, `1` or `x`.
+A `chat_id` is a number Telegram assigns, not something you choose: it appears on
+the trigger the first time someone sends the bot `/start`. The workflow strips
+anything that is not a digit. `active` accepts `TRUE`, `yes`, `1` or `x`.
 
 `focus` is free text. Nothing in the code interprets it — it is printed in the
 morning message and matched by the coach against the `Focus` column in the
@@ -82,7 +83,7 @@ tool call today, which is linear in how big the library gets.
 
 ## Run it locally
 
-You do not need a Google account, a WhatsApp number or an API key to open this
+You do not need a Google account, a Telegram bot or an API key to open this
 and look around. The commands below are the ones used to produce the screenshot
 above, on Windows with Node 24; they work the same on macOS and Linux.
 
@@ -138,13 +139,12 @@ it. See _Tests_.
 
 ## Connecting it for real
 
-1. **Credentials** — none are bundled. Three are required: Google Sheets OAuth2,
-   WhatsApp Business Cloud (`whatsAppApi`) and WhatsApp Trigger
-   (`whatsAppTriggerApi`). Two are optional: Anthropic and Notion, both for lane
-   3 only. Without them lanes 1 and 2 still set goals and log numbers.
-2. **Replace three placeholders.** They are spelled exactly this way everywhere:
+1. **Credentials** — none are bundled. Two are required: Google Sheets OAuth2,
+   and Telegram (`telegramApi`) — one bot token, shared by the trigger and the
+   three Telegram nodes. Two are optional: Google Gemini and Notion, both for
+   lane 3 only. Without them lanes 1 and 2 still set goals and log numbers.
+2. **Replace two placeholders.** They are spelled exactly this way everywhere:
    - `REPLACE_WITH_SPREADSHEET_ID` — the Google Sheet id, on all five Sheets nodes
-   - `REPLACE_WITH_PHONE_NUMBER_ID` — your WhatsApp sender, on all three WhatsApp nodes
    - `REPLACE_WITH_NOTION_DATA_SOURCE_ID` — the playbook library, on
      **read_the_playbooks**. Easier from inside n8n: connect the Notion
      credential, open the node and pick it from the _Data Source_ list. Note that
@@ -155,15 +155,17 @@ it. See _Tests_.
 3. **Unpin `Get the people`** once the Sheets credential is on, or leave it —
    pinned data is ignored by production executions either way. Unpinning just
    stops manual runs from quietly using the samples.
-4. **Activate.** Note that a WhatsApp app can only carry one trigger webhook, so
-   nothing else can subscribe to the same app, and the webhook needs a public
-   URL — a tunnel in front of localhost, or `npx n8n@2.35.7 start --tunnel` for a
-   throwaway one.
+4. **Activate.** Telegram allows one webhook per bot, so nothing else can
+   subscribe to the same token, and it needs a public HTTPS URL — a tunnel in
+   front of localhost, or `npx n8n@2.35.7 start --tunnel` for a throwaway one.
+   n8n calls `setWebhook` itself on activation; there is nothing to register by
+   hand.
 
-Meta's free WhatsApp test number sends to **five** pre-registered recipients, each
-confirming by code in the dashboard, with no business verification. That is the
-cheapest way to put this in front of someone; going past five needs a real
-business number and Meta review.
+A bot is made by sending [@BotFather](https://t.me/BotFather) `/newbot`; it
+answers with the token, and the token is the whole credential. No business
+verification, no recipient cap, no paid tier. The one constraint is that a bot
+cannot open a conversation: each person sends it `/start` once, and their
+`chat_id` appears on the trigger from that moment.
 
 ## Known defects
 
@@ -222,7 +224,7 @@ on, so the number in it should not have a temperature. A structural test asserts
 that **Record the day** has exactly one upstream node.
 
 **The agent can fill in cells, not choose the row.** `log_the_day` takes `calls`,
-`hours` and `note` from `$fromAI()`; `key`, `date`, `phone` and both targets are
+`hours` and `note` from `$fromAI()`; `key`, `date`, `chat_id` and both targets are
 expressions off the item. So the model can be wrong about a number someone said,
 but it cannot write that number onto the wrong person, the wrong day, or a target
 nobody set. It also cannot change a goal — only the `People` tab does that, and
@@ -234,7 +236,7 @@ row it just read, and tells it to hand anything else back to whoever set the
 goals. Grounding a coach persona is the whole difficulty: "be a coach" is an
 invitation to invent a discount floor, and someone will act on it.
 
-**One agent, many people, one thread each.** Memory is keyed on the phone number
+**One agent, many people, one thread each.** Memory is keyed on the chat id
 and the prompt says nothing from one person may appear in a reply to another.
 That is a prompt-level guarantee on top of a session-level one; the session key
 is the part that actually holds.
@@ -242,7 +244,7 @@ is the part that actually holds.
 **A blank is not a zero.** Lane 1 writes the row when the goal goes out, so the
 log can tell "said zero" from "never answered".
 
-**One key, written twice.** `date|phone` is built in lane 1 and rebuilt from the
+**One key, written twice.** `date|chat_id` is built in lane 1 and rebuilt from the
 inbound message in lane 2. Every write is `appendOrUpdate` matching on it, so the
 evening's answer lands on the morning's row and a re-run never duplicates.
 
@@ -251,7 +253,7 @@ attributed to the previous day — otherwise the 00:30 answer opens a second row
 for a day nobody was asked about.
 
 **The coach degrades instead of dropping.** The agent is set to _continue using
-error output_, and both outputs land on the same Set node. No Anthropic
+error output_, and both outputs land on the same Set node. No Gemini
 credential, rate limit, bad day — the person gets "how many calls did you hold
 today?" rather than silence, and the regex lane logs their answer.
 **read_the_playbooks** continues on error too, so a Notion outage costs the
@@ -298,13 +300,12 @@ The **TODO** sticky on the canvas lists the rest:
   the rest.
 - **Friday scorecard.** The week as a chart, to the person and to whoever coaches
   them.
-- **Chasing the quiet.** A nudge for anyone who never replied, respecting
-  WhatsApp's 24-hour free-text window.
+- **Chasing the quiet.** A nudge for anyone who never replied. Telegram has no
+  24-hour messaging window, so only the schedule is missing.
 - **Calling, not only texting.** A ringing phone is a different kind of interrupt
   from a message that sits unread all evening. An [ElevenLabs](https://elevenlabs.io/docs/agents-platform/phone-numbers/outbound-calling)
   voice agent could place the nudge as an outbound call and take the number by
-  voice. It also sidesteps the 24-hour window, which governs WhatsApp messages
-  and not phone calls — at the cost of needing explicit consent to ring someone,
+  voice — at the cost of needing explicit consent to ring someone,
   which the `People` sheet would have to record and honour.
 - **Evals.** Groundedness and logging accuracy on the coach reply — before any of
   the above, because the above all trusts it.

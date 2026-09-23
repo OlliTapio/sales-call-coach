@@ -6,15 +6,15 @@ import { eachNode, finding, strings, type Rule } from './rule.ts';
 
 /** Safe to retry: reads, and upserts on a key. */
 const IDEMPOTENT = new Set(['n8n-nodes-base.googleSheets']);
-/** n8n retries a whole node and WhatsApp has no idempotency key, so a retry can double-send. */
-const SENDS = new Set(['n8n-nodes-base.whatsApp']);
+/** n8n retries a whole node and Telegram has no idempotency key, so a retry can double-send. */
+const SENDS = new Set(['n8n-nodes-base.telegram']);
 const AI_ROOTS = new Set([
   '@n8n/n8n-nodes-langchain.chainLlm',
   '@n8n/n8n-nodes-langchain.informationExtractor',
   '@n8n/n8n-nodes-langchain.agent',
 ]);
 const DEFAULT_NAME =
-  /^(Code|If|Switch|Merge|Filter|Set|Edit Fields|HTTP Request|Google Sheets|WhatsApp Business Cloud|Schedule Trigger|Sticky Note|Webhook|No Operation, do nothing)\d*$/;
+  /^(Code|If|Switch|Merge|Filter|Set|Edit Fields|HTTP Request|Google Sheets|Telegram|Schedule Trigger|Sticky Note|Webhook|No Operation, do nothing)\d*$/;
 const PLACEHOLDER = /^REPLACE_WITH_[A-Z_]+$/;
 const MAX_EXPRESSION_CODE = 80;
 
@@ -84,7 +84,7 @@ const noCredentialsExported: Rule = {
       ),
 };
 
-const HARDCODE_KEYS = new Set(['documentId.value', 'phoneNumberId', 'recipientPhoneNumber']);
+const HARDCODE_KEYS = new Set(['documentId.value', 'chatId']);
 
 const noHardcodedTargets: Rule = {
   id: 'no-hardcoded-targets',
