@@ -173,8 +173,10 @@ test('the playbooks are read whole, and a Notion outage does not stop the coach'
   assert.equal(notion.parameters.resource, 'databasePage');
   assert.equal(notion.parameters.operation, 'getAll');
   assert.equal(notion.parameters.returnAll, true);
-  // Notion's search endpoint matches page titles only, so there is nothing to
-  // gain from a query here — the agent reads the library and picks.
+  // Read whole because the library is a few dozen rows, not because Notion
+  // cannot filter it — a database query does support property conditions, and
+  // filtering on Focus is on the TODO note. Do not restate the title-only
+  // limitation of the *search* endpoint here; it is a different endpoint.
   assert.equal(notion.parameters.filterType, 'none');
   assert.equal(notion.onError, 'continueRegularOutput');
   assert.equal(notion.alwaysOutputData, true);
@@ -186,6 +188,38 @@ test('the playbooks are read whole, and a Notion outage does not stop the coach'
 
 test('the people list is read once per reply, not once per message', () => {
   assert.equal(byName['Get the people (reply)'].executeOnce, true);
+});
+
+test('the three Days writes map the same columns as the sheet itself', () => {
+  // The 14-column map is written out three times in workflow.json and once
+  // more as the CSV header. Adding a column to one of them and not the others
+  // would otherwise ship green.
+  const header = readFileSync(new URL('../sheets/Days.csv', import.meta.url), 'utf8')
+    .split(/\r?\n/)[0].trim().split(',');
+
+  for (const name of ['Log the goals', 'Record the day', 'log_the_day']) {
+    assert.deepEqual(
+      Object.keys(byName[name].parameters.columns.value).sort(),
+      [...header].sort(),
+      `${name} does not map the Days columns`);
+  }
+});
+
+test('every node that could carry a real id carries the placeholder instead', () => {
+  // Counting node types is not enough: one spreadsheet id pasted in during
+  // debugging would ship with every other check green.
+  for (const node of wf.nodes) {
+    const json = JSON.stringify(node.parameters);
+    if (node.type.startsWith('n8n-nodes-base.googleSheets')) {
+      assert.match(json, /REPLACE_WITH_SPREADSHEET_ID/, `${node.name} has a real spreadsheet id`);
+    }
+    if (node.type === 'n8n-nodes-base.whatsApp') {
+      assert.match(json, /REPLACE_WITH_PHONE_NUMBER_ID/, `${node.name} has a real phone number id`);
+    }
+    if (node.type.startsWith('n8n-nodes-base.notion')) {
+      assert.match(json, /REPLACE_WITH_NOTION_DATA_SOURCE_ID/, `${node.name} has a real Notion id`);
+    }
+  }
 });
 
 test('status-only webhooks do not wake the reply workflow', () => {

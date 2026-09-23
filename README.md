@@ -74,9 +74,11 @@ it.
 | `Effort` | Text | how long it takes |
 | `Active` | Checkbox | untick to retire a task — advisory, see *Known defects* |
 
-This database is the coach's entire world. It is read whole on each call — the
-library is a few dozen rows, and Notion's search endpoint matches page *titles*
-rather than their contents, so there is nothing to gain from querying it.
+This database is the coach's entire world. It is read whole on each call, because
+a few dozen rows cost less to hand over than to filter. That is a size argument,
+not a limitation: a Notion database query *can* filter on `Focus`, and doing so
+is on the TODO note — the whole library goes into the model's context on every
+tool call today, which is linear in how big the library gets.
 
 ## Run it locally
 
@@ -264,12 +266,12 @@ pasted into n8n unchanged.
 
 ```
 npm install
-npm test        # 48 checks
+npm test        # 50 checks
 npm run sync    # write code/*.js into workflow.json after editing one
 ```
 
 `code/*.js` is the source of truth for the Code nodes; `npm test` fails if
-`workflow.json` has drifted from it. Twenty-four of the checks are structural:
+`workflow.json` has drifted from it. Twenty-six of the checks are structural:
 they read the exported JSON and catch what only shows up after you import and
 press Execute — a connection to a renamed node, an expression pointing at a node
 that no longer exists, a placeholder that shipped. One of them asserts that the
