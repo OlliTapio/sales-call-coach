@@ -5,23 +5,24 @@
 import { relative } from 'node:path';
 import { projectDir, readInput, reply } from './lib.ts';
 
-const POLICY = new Set([
+const POLICY_FILES = new Set([
   'tsconfig.json',
   'eslint.config.ts',
   'vitest.config.ts',
   'knip.json',
-  '.claude/settings.json',
-  'tools/workflow-lint/lint.ts',
+  'lefthook.yml',
+  'package.json',
+  '.prettierrc.json',
+  '.prettierignore',
+  'AGENTS.md',
+  'CLAUDE.md',
 ]);
+const POLICY_DIRS = ['.claude/', '.github/', 'tools/eslint-rules/', 'tools/workflow-lint/'];
 
 const file = readInput().tool_input?.file_path ?? '';
 const path = relative(projectDir(), file).replaceAll('\\', '/');
 
-if (
-  POLICY.has(path) ||
-  path.startsWith('.claude/hooks/') ||
-  path.startsWith('tools/eslint-rules/')
-) {
+if (POLICY_FILES.has(path) || POLICY_DIRS.some((dir) => path.startsWith(dir))) {
   reply({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',

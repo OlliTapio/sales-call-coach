@@ -21,8 +21,9 @@ rules into hooks, since CLAUDE.md is advisory and hooks are enforced.
   agent-specific commit gate is needed. CI runs `check` on every PR.
 - Claude Code hooks (`.claude/settings.json`, scripts in `.claude/hooks/`) cover what git
   hooks cannot:
-  - **PreToolUse Bash** `no-verify`: refuses `git commit`/`git push` with `--no-verify`,
-    the one way past lefthook.
+  - **PreToolUse Bash** `no-verify`: refuses git commands that skip lefthook:
+    `--no-verify`, `commit -n`, `LEFTHOOK=0`, or a `core.hooksPath` override. It is
+    best-effort; CI running `check` on every PR is the backstop.
   - **PreToolUse Edit/Write** `guard-policy`: editing tsconfig, the ESLint config, the
     lint rules, coverage settings or the hooks asks the human first.
   - **PostToolUse Edit/Write** `after-edit`: Prettier and `eslint --fix` on the file;
@@ -35,5 +36,6 @@ rules into hooks, since CLAUDE.md is advisory and hooks are enforced.
 
 ## Consequences
 
-Commits are slower by a few seconds. A broken state can still be created mid-task, but
-it cannot be committed, pushed or left behind at the end of a session.
+Commits are slower by a few seconds. A broken state can still be created mid-task.
+The hooks make it hard to commit or push, the Stop hook pushes back once before a
+session ends, and CI refuses it at merge.

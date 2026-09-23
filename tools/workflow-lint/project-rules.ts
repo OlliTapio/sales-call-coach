@@ -169,7 +169,7 @@ const placeholders: Rule = {
   },
 };
 
-const WORDS = [
+const ONES = [
   'zero',
   'one',
   'two',
@@ -181,8 +181,25 @@ const WORDS = [
   'eight',
   'nine',
   'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
 ];
-const inWords = (n: number): string => (n === 33 ? 'Thirty-three' : (WORDS[n] ?? String(n)));
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+/** English words for 0–99, the way the README spells counts ("thirty-three"). */
+export const inWords = (n: number): string => {
+  if (n < 20) return ONES[n] ?? String(n);
+  const tens = TENS[Math.floor(n / 10)];
+  if (n >= 100 || tens === undefined) return String(n);
+  return n % 10 === 0 ? tens : `${tens}-${ONES[n % 10] ?? ''}`;
+};
 
 const readmeCounts: Rule = {
   id: 'readme-counts-match-canvas',
@@ -197,7 +214,7 @@ const readmeCounts: Rule = {
       `The ${inWords(count('n8n-nodes-base.code'))} Code nodes`,
     ];
     return claims
-      .filter((claim) => !ctx.readme.includes(claim))
+      .filter((claim) => !ctx.readme.toLowerCase().includes(claim.toLowerCase()))
       .map((claim) =>
         finding(
           'readme-counts-match-canvas',

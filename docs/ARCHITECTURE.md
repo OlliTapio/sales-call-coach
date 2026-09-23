@@ -60,8 +60,9 @@ Also, for all of `src/`:
 | Sheet rows match `sheets/*.csv` headers                                        | `test/nodes/sheet-contract.test.ts`                                                        |
 | No dead exports, files or dependencies                                         | knip                                                                                       |
 
-All of it runs as `npm run check`: in CI, in the git pre-push hook, and in the
-Claude Code hooks (see `AGENTS.md`).
+All of it runs as `npm run check`, in CI and in the lefthook pre-push hook. The
+lefthook pre-commit and the Claude Code Stop hook run the lighter `check:fast`
+(see `AGENTS.md`).
 
 ## How a Code node is built
 

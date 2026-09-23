@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { readWorkflow, type Workflow, type WorkflowNode } from '../../tools/build/workflow-file.ts';
 import { format, lintWorkflow, RULES } from '../../tools/workflow-lint/lint.ts';
+import { inWords } from '../../tools/workflow-lint/project-rules.ts';
 
 const README = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
 const WORKFLOW = readWorkflow();
@@ -116,5 +117,19 @@ describe('workflow lint', () => {
     expect(lintWorkflow(WORKFLOW, '').some((f) => f.rule === 'placeholders-match-readme')).toBe(
       true,
     );
+  });
+});
+
+describe('inWords', () => {
+  test.each([
+    [0, 'zero'],
+    [8, 'eight'],
+    [13, 'thirteen'],
+    [30, 'thirty'],
+    [33, 'thirty-three'],
+    [99, 'ninety-nine'],
+    [120, '120'],
+  ])('%i is %s', (n, words) => {
+    expect(inWords(n)).toBe(words);
   });
 });

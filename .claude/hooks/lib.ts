@@ -1,6 +1,7 @@
-/** @file Shared plumbing for the Claude Code hooks: read the event, run a command, reply. */
+/** @file Shared plumbing for the Claude Code hooks: read the event, run a tool, reply. */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export interface HookInput {
   readonly tool_name?: string;
@@ -21,9 +22,25 @@ export interface Run {
 
 export const projectDir = (): string => process.env['CLAUDE_PROJECT_DIR'] ?? process.cwd();
 
-/** `shell: true` so `npm`/`npx` resolve to their `.cmd` shims on Windows. */
-export const run = (command: string): Run => {
-  const result = spawnSync(command, {
+/** No shell: arguments (such as an edited file's path) are never parsed as shell syntax. */
+export const run = (file: string, args: readonly string[]): Run => {
+  const result = spawnSync(file, args, {
+    cwd: projectDir(),
+    shell: false,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const output = `${result.stdout}${result.stderr}${result.error?.message ?? ''}`;
+  return { ok: result.status === 0, output: output.trim() };
+};
+
+/** A project script run by this same Node, e.g. `node('node_modules/eslint/bin/eslint.js', …)`. */
+export const node = (script: string, args: readonly string[] = []): Run =>
+  run(process.execPath, [join(projectDir(), script), ...args]);
+
+/** A shell is needed for npm's `.cmd` shim on Windows; the name is a fixed literal, never input. */
+export const npmScript = (name: 'check' | 'check:fast'): Run => {
+  const result = spawnSync(`npm run -s ${name}`, {
     cwd: projectDir(),
     shell: true,
     encoding: 'utf8',

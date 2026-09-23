@@ -1,0 +1,37 @@
+import { describe, expect, test } from 'vitest';
+import { hookBypass } from '../../.claude/hooks/bypass.ts';
+
+describe('hookBypass', () => {
+  test.each([
+    'git commit --no-verify -m x',
+    'git commit -n -m x',
+    'git commit -nm "x"',
+    'git commit -anm "x"',
+    'git -C . commit -n',
+    'git -c core.hooksPath=/dev/null commit -m x',
+    'LEFTHOOK=0 git commit -m x',
+    'LEFTHOOK_EXCLUDE=eslint git commit -m x',
+    'git push --no-verify',
+    'npm test && git commit --no-verify -m x',
+    'cd repo; git push --no-verify origin main',
+  ])('blocks %j', (command) => {
+    expect(hookBypass(command)).not.toBeNull();
+  });
+
+  test.each([
+    'git commit -m "x"',
+    'git commit -m "support -n flag"',
+    'git commit -mn',
+    'git push -n origin main',
+    'git push -u origin main',
+    'git log -n 5',
+    'ls -la',
+    'echo "git commit --no-verify"',
+    "gh pr create --body-file - <<'EOF'\n- `git commit --no-verify` is refused\nEOF",
+    'gh pr create --body "cd x && git commit --no-verify"',
+    'LEFTHOOK_VERBOSE=1 git commit -m x',
+    '',
+  ])('allows %j', (command) => {
+    expect(hookBypass(command)).toBeNull();
+  });
+});

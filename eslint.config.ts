@@ -15,7 +15,11 @@ const N8N_GLOBALS = ['$input', '$now', '$', '$json', '$items', '$node'];
 const noGlobals = (names: readonly string[], why: string) =>
   names.map((name) => ({ name, message: `${name} is an n8n global. ${why}` }));
 
-const ban = (group: readonly string[], why: string) => ({ group: [...group], message: why });
+const ban = (group: readonly string[], why: string, allowTypeImports = false) => ({
+  group: [...group],
+  message: why,
+  allowTypeImports,
+});
 
 const LUXON_TYPES_ONLY = {
   name: 'luxon',
@@ -41,7 +45,7 @@ const layer = (
 ): Linter.Config => ({
   files: [files],
   rules: {
-    'no-restricted-imports': [
+    '@typescript-eslint/no-restricted-imports': [
       'error',
       { paths: [LUXON_TYPES_ONLY], patterns: [NO_NODE_BUILTINS, SRC_ONLY, ...groups] },
     ],
@@ -102,7 +106,7 @@ export default defineConfig(
   {
     files: ['src/**/*.ts'],
     rules: {
-      'no-restricted-imports': [
+      '@typescript-eslint/no-restricted-imports': [
         'error',
         { paths: [LUXON_TYPES_ONLY], patterns: [NO_NODE_BUILTINS, SRC_ONLY] },
       ],
@@ -137,6 +141,7 @@ export default defineConfig(
         ['**/adapters/**', '**/nodes/**', '**/n8n/**'],
         'views/ may import domain/ types and shared/ only.',
       ),
+      ban(['**/domain/**'], 'views/ may import domain/ types only; use `import type`.', true),
     ],
     [...N8N_GLOBALS, 'DateTime'],
     'views/ is pure; the controller passes values in.',
@@ -151,6 +156,24 @@ export default defineConfig(
     ],
     N8N_GLOBALS,
     'adapters/ receive raw JSON as a parameter; only src/nodes and src/n8n read n8n globals.',
+  ),
+
+  layer(
+    'src/n8n/**/*.ts',
+    [
+      ban(
+        ['**/domain/**', '**/views/**', '**/adapters/**', '**/nodes/**'],
+        'n8n/ is the runtime boundary; it imports shared/ only.',
+      ),
+    ],
+    [],
+    '',
+  ),
+  layer(
+    'src/nodes/**/*.ts',
+    [],
+    ['$now'],
+    'Read the clock through localNow() in src/n8n/clock.ts.',
   ),
 
   // Functional core, imperative shell.

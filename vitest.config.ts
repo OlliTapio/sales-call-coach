@@ -5,7 +5,7 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts', 'tools/**/*.ts'],
+      include: ['src/**/*.ts', 'tools/**/*.ts', '.claude/hooks/bypass.ts'],
       exclude: ['src/n8n/globals.d.ts', 'tools/**/cli.ts', 'tools/build/build-nodes.ts'],
       reporter: ['text-summary', 'text'],
       thresholds: {
